@@ -1,6 +1,7 @@
 import json
 import numpy as np
 import networkx as nx
+import os
 
 from pathlib import Path
 from datetime import datetime
@@ -9,6 +10,8 @@ from driftguard.logging_config import get_logger
 
 
 logger = get_logger(__name__)
+PERSISTENCE_FORMAT_NAME = "driftguard_graph"
+PERSISTENCE_FORMAT_VERSION = 1
 
 
 # =====================================================
@@ -63,10 +66,21 @@ class Persistence:
 
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        data = nx.node_link_data(graph)
+        payload = {
+            "format": PERSISTENCE_FORMAT_NAME,
+            "format_version": PERSISTENCE_FORMAT_VERSION,
+            "graph": nx.node_link_data(graph),
+        }
+        temp_path = self.filepath.with_suffix(f"{self.filepath.suffix}.tmp")
 
-        with open(self.filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, cls=_GraphEncoder, indent=2)
+        try:
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, cls=_GraphEncoder, indent=2)
+            os.replace(temp_path, self.filepath)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+
         logger.info(
             "Saved graph to %s nodes=%d edges=%d",
             self.filepath,
@@ -85,9 +99,10 @@ class Persistence:
             return None
 
         with open(self.filepath, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            raw_payload = json.load(f)
 
-        graph = nx.node_link_graph(data, directed=True)
+        graph_data = self._extract_graph_data(raw_payload)
+        graph = nx.node_link_graph(graph_data, directed=True)
 
         # Restore numpy arrays and datetime objects
         for node in graph.nodes:
@@ -121,3 +136,45 @@ class Persistence:
             graph.number_of_edges(),
         )
         return graph
+
+    def _extract_graph_data(self, raw_payload: dict) -> dict:
+        if not isinstance(raw_payload, dict):
+            raise ValueError("Persistence payload must be a JSON object")
+
+        # Backward compatibility for the original node-link JSON format.
+        if (
+            "format" not in raw_payload
+            and "format_version" not in raw_payload
+            and self._looks_like_node_link_graph(raw_payload)
+        ):
+            logger.warning(
+                "Loading legacy persistence format from %s without version metadata",
+                self.filepath,
+            )
+            return raw_payload
+
+        payload_format = raw_payload.get("format")
+        version = raw_payload.get("format_version")
+        graph_data = raw_payload.get("graph")
+
+        if payload_format != PERSISTENCE_FORMAT_NAME:
+            raise ValueError(
+                f"Unsupported persistence format: {payload_format!r}"
+            )
+
+        if version != PERSISTENCE_FORMAT_VERSION:
+            raise ValueError(
+                f"Unsupported persistence format version: {version!r}"
+            )
+
+        if not self._looks_like_node_link_graph(graph_data):
+            raise ValueError("Persistence graph payload is invalid or incomplete")
+
+        return graph_data
+
+    def _looks_like_node_link_graph(self, payload: dict | None) -> bool:
+        return (
+            isinstance(payload, dict)
+            and "nodes" in payload
+            and ("links" in payload or "edges" in payload)
+        )
