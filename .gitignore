@@ -39,6 +39,7 @@ ENV/
 driftguard_graph.json
 persistence-test-*.json
 pipeline-test-*.json
+demo/output/
 tmp*/
 
 # Editors and IDEs

@@ -41,8 +41,14 @@ Issues = "https://github.com/sujal-maheshwari2004/DriftGuard/issues"
 test = [
     "pytest>=9.0.2",
 ]
+demo = [
+    "langchain-openai>=0.3.0",
+    "langgraph>=0.2.60",
+]
 dev = [
     "build>=1.2.2.post1",
+    "langchain-openai>=0.3.0",
+    "langgraph>=0.2.60",
     "pytest>=9.0.2",
 ]
 

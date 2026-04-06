@@ -198,6 +198,27 @@ guard.record(
 )
 ```
 
+## Local Demo
+
+There are now two local demo tracks under [demo/README.md](demo/README.md):
+- `demo/rule_based/`: the original deterministic simulator for fast graph-growth walkthroughs
+- `demo/langgraph/`: a LangGraph-based LLM agent that DriftGuard reviews before each step
+
+Rule-based walkthrough:
+
+```powershell
+.\.venv\Scripts\python.exe .\demo\rule_based\demo_agent.py --duration-seconds 600 --step-delay 5 --prune-every 6 --reset-graph --log-level WARNING
+```
+
+LangGraph LLM walkthrough:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[demo]"
+.\.venv\Scripts\python.exe .\demo\langgraph\demo_agent.py --duration-seconds 120 --step-delay 4 --prune-every 4 --reset-graph
+```
+
+The rule-based demo defaults to an offline-friendly built-in runtime so you can exercise DriftGuard locally even if the Hugging Face model is not cached yet. The LangGraph demo uses an OpenAI-compatible chat model and reads `OPENAI_API_KEY` plus optional `OPENAI_MODEL` / `OPENAI_BASE_URL`.
+
 ## Development
 
 Run tests:
