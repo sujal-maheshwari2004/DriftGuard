@@ -1,0 +1,11 @@
+fastmcp
+networkx
+sentence-transformers
+spacy
+numpy
+pydantic
+orjson
+sqlite-utils
+python-dateutil
+rich
+tenacity
