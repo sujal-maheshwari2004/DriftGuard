@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 
-from DriftGuard.models.response import Warning, RetrievalResponse
+from driftguard.models.response import Warning, RetrievalResponse
 
 
 class RetrievalEngine:

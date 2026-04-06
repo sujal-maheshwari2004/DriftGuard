@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "driftguard"
 version = "0.1.0"
@@ -17,3 +21,9 @@ dependencies = [
     "sqlite-utils>=3.39",
     "tenacity>=9.1.4",
 ]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

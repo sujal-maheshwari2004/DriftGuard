@@ -1,10 +1,10 @@
 import pytest
 
-from DriftGuard.models.event import Event
-from DriftGuard.graph.graph_store import GraphStore
-from DriftGuard.graph.merge_engine import MergeEngine
-from DriftGuard.graph.prune_engine import PruneEngine
-from DriftGuard.retrieval.retrieval_engine import RetrievalEngine
+from driftguard.models.event import Event
+from driftguard.graph.graph_store import GraphStore
+from driftguard.graph.merge_engine import MergeEngine
+from driftguard.graph.prune_engine import PruneEngine
+from driftguard.retrieval.retrieval_engine import RetrievalEngine
 
 
 # =====================================================
@@ -120,7 +120,7 @@ def test_cosine_similarity_zero_vector():
     """Cosine similarity should return 0.0 for zero vectors, not crash."""
 
     import numpy as np
-    from DriftGuard.utils.similarity import cosine_similarity
+    from driftguard.utils.similarity import cosine_similarity
 
     a = np.zeros(384)
     b = np.ones(384)
@@ -133,7 +133,7 @@ def test_persistence_save_load(tmp_path):
 
     import networkx as nx
     from datetime import datetime, UTC
-    from DriftGuard.storage.persistence import Persistence
+    from driftguard.storage.persistence import Persistence
     import numpy as np
 
     p = Persistence(filepath=str(tmp_path / "test.json"))

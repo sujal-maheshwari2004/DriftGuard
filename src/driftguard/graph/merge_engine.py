@@ -1,10 +1,10 @@
 import numpy as np
 
-from DriftGuard.embedding.embedding_engine import EmbeddingEngine
-from DriftGuard.utils.normalization import normalize_text
-from DriftGuard.utils.similarity import cosine_similarity
+from driftguard.embedding.embedding_engine import EmbeddingEngine
+from driftguard.utils.normalization import normalize_text
+from driftguard.utils.similarity import cosine_similarity
 
-from DriftGuard.config import (
+from driftguard.config import (
     SIM_THRESHOLD_ACTION,
     SIM_THRESHOLD_FEEDBACK,
     SIM_THRESHOLD_OUTCOME,
