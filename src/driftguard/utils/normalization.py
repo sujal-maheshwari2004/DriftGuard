@@ -1,5 +1,6 @@
-import spacy
+from importlib import import_module
 
+from driftguard.errors import NormalizationDependencyError
 from driftguard.logging_config import get_logger
 
 _nlp = None
@@ -16,7 +17,23 @@ def _get_nlp():
 
     if _nlp is None:
         logger.info("Loading spaCy normalization model en_core_web_sm")
-        _nlp = spacy.load("en_core_web_sm")
+        try:
+            spacy = import_module("spacy")
+        except Exception as exc:
+            logger.exception("Failed to import spaCy")
+            raise NormalizationDependencyError(
+                "DriftGuard could not import spaCy. Install the 'spacy' package "
+                "to enable text normalization."
+            ) from exc
+
+        try:
+            _nlp = spacy.load("en_core_web_sm")
+        except Exception as exc:
+            logger.exception("Failed to load spaCy model en_core_web_sm")
+            raise NormalizationDependencyError(
+                "DriftGuard could not load the spaCy model 'en_core_web_sm'. "
+                "Install it with: python -m spacy download en_core_web_sm"
+            ) from exc
 
     return _nlp
 

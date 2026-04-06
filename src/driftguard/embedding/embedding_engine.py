@@ -1,5 +1,6 @@
-from sentence_transformers import SentenceTransformer
+from importlib import import_module
 
+from driftguard.errors import EmbeddingDependencyError
 from driftguard.logging_config import get_logger
 
 
@@ -34,10 +35,22 @@ class EmbeddingEngine:
             device,
         )
 
-        self.model = SentenceTransformer(
-            model_name,
-            device=device,
-        )
+        try:
+            sentence_transformers = import_module("sentence_transformers")
+            self.model = sentence_transformers.SentenceTransformer(
+                model_name,
+                device=device,
+            )
+        except Exception as exc:
+            logger.exception(
+                "Failed to initialize embedding model model_name=%s",
+                model_name,
+            )
+            raise EmbeddingDependencyError(
+                "DriftGuard could not initialize the sentence-transformers embedding "
+                f"model {model_name!r}. Install the 'sentence-transformers' package "
+                "and ensure the model is available locally or downloadable."
+            ) from exc
         logger.info("Embedding model ready model_name=%s", model_name)
 
     # =====================================================
@@ -50,10 +63,16 @@ class EmbeddingEngine:
         """
 
         logger.debug("Embedding single text length=%d", len(text))
-        return self.model.encode(
-            text,
-            normalize_embeddings=True,
-        )
+        try:
+            return self.model.encode(
+                text,
+                normalize_embeddings=True,
+            )
+        except Exception as exc:
+            logger.exception("Embedding failed for single text")
+            raise EmbeddingDependencyError(
+                "DriftGuard failed while generating an embedding for a single text input."
+            ) from exc
 
     # =====================================================
     # BATCH EMBEDDING
@@ -65,10 +84,16 @@ class EmbeddingEngine:
         """
 
         logger.debug("Embedding batch size=%d", len(texts))
-        return self.model.encode(
-            texts,
-            normalize_embeddings=True,
-        )
+        try:
+            return self.model.encode(
+                texts,
+                normalize_embeddings=True,
+            )
+        except Exception as exc:
+            logger.exception("Embedding failed for batch size=%d", len(texts))
+            raise EmbeddingDependencyError(
+                "DriftGuard failed while generating embeddings for a batch of texts."
+            ) from exc
 
     # =====================================================
     # MODEL INFO
