@@ -1,6 +1,7 @@
 import pytest
 
 from driftguard.models.event import Event
+from driftguard.models.response import RetrievalResponse, Warning
 from driftguard.graph.graph_store import GraphStore
 from driftguard.graph.merge_engine import MergeEngine
 from driftguard.graph.prune_engine import PruneEngine
@@ -50,6 +51,25 @@ def test_event_timestamp_is_unique():
     e2 = Event(action="a", feedback="b", outcome="c")
 
     assert e1.timestamp != e2.timestamp
+
+
+def test_retrieval_response_timestamp_is_unique():
+    """Each RetrievalResponse should get a fresh timestamp."""
+
+    r1 = RetrievalResponse(
+        query="q",
+        warnings=[Warning("a", "b", 1, 0.6)],
+        chains=[["a", "b"]],
+        confidence=0.6,
+    )
+    r2 = RetrievalResponse(
+        query="q",
+        warnings=[Warning("a", "b", 1, 0.6)],
+        chains=[["a", "b"]],
+        confidence=0.6,
+    )
+
+    assert r1.timestamp != r2.timestamp
 
 
 def test_add_event_creates_nodes(graph_store):

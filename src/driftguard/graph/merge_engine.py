@@ -1,15 +1,10 @@
 import numpy as np
 
+from driftguard.config import DEFAULT_SETTINGS, DriftGuardSettings
 from driftguard.embedding.embedding_engine import EmbeddingEngine
+from driftguard.logging_config import get_logger
 from driftguard.utils.normalization import normalize_text
 from driftguard.utils.similarity import cosine_similarity
-from driftguard.logging_config import get_logger
-
-from driftguard.config import (
-    SIM_THRESHOLD_ACTION,
-    SIM_THRESHOLD_FEEDBACK,
-    SIM_THRESHOLD_OUTCOME,
-)
 
 
 logger = get_logger(__name__)
@@ -26,8 +21,17 @@ class MergeEngine:
     - Return canonical node match or None
     """
 
-    def __init__(self):
-        self.embedding_engine = EmbeddingEngine()
+    def __init__(
+        self,
+        *,
+        settings: DriftGuardSettings | None = None,
+        embedding_engine: EmbeddingEngine | None = None,
+    ):
+        self.settings = settings or DEFAULT_SETTINGS
+        self.embedding_engine = embedding_engine or EmbeddingEngine(
+            model_name=self.settings.embedding_model_name,
+            device=self.settings.embedding_device,
+        )
         logger.info(
             "Merge engine ready with embedding_model=%s",
             self.embedding_engine.model_name(),
@@ -150,9 +154,4 @@ class MergeEngine:
     # =====================================================
 
     def _get_threshold(self, node_type: str) -> float:
-
-        return {
-            "action": SIM_THRESHOLD_ACTION,
-            "feedback": SIM_THRESHOLD_FEEDBACK,
-            "outcome": SIM_THRESHOLD_OUTCOME,
-        }.get(node_type, 0.85)
+        return self.settings.threshold_for(node_type)

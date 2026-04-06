@@ -23,6 +23,9 @@ dependencies = [
     "tenacity>=9.1.4",
 ]
 
+[project.scripts]
+driftguard-mcp = "driftguard.server:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

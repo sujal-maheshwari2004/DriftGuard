@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from typing import List
 
@@ -17,4 +17,6 @@ class RetrievalResponse:
     warnings: List[Warning]
     chains: List[List[str]]
     confidence: float
-    timestamp: datetime = datetime.now(UTC)
+    timestamp: datetime = field(
+        default_factory=lambda: datetime.now(UTC)
+    )
