@@ -1,11 +1,52 @@
-# Python-generated files
+# Python bytecode and caches
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.pyo
+*.pyd
+*.py,cover
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.nox/
+.tox/
+
+# Test and coverage artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Build, packaging, and distribution outputs
 build/
 dist/
+site/
 wheels/
-*.egg-info
+*.egg-info/
+src/*.egg-info/
+pip-wheel-metadata/
 
 # Virtual environments
-.venv
-.pkl
+.venv/
+venv/
+env/
+ENV/
+
+# Local runtime data and temp files
+*.tmp
+*.pkl
+driftguard_graph.json
+persistence-test-*.json
+pipeline-test-*.json
+tmp*/
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini

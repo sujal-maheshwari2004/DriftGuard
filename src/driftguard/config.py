@@ -8,6 +8,9 @@ class DriftGuardSettings:
     embedding_device: str | None = None
     retrieval_top_k: int = 5
     retrieval_min_similarity: float = 0.60
+    traversal_max_depth: int = 3
+    traversal_max_branching: int = 10
+    traversal_max_paths: int = 100
     similarity_threshold_action: float = 0.72
     similarity_threshold_feedback: float = 0.70
     similarity_threshold_outcome: float = 0.88

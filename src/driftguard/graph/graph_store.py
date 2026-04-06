@@ -26,11 +26,17 @@ class GraphStore:
         merge_engine,
         prune_engine,
         persistence_engine,
+        traversal_max_depth: int = 3,
+        traversal_max_branching: int = 10,
+        traversal_max_paths: int = 100,
     ):
         self.graph = nx.DiGraph()
         self.merge_engine = merge_engine
         self.prune_engine = prune_engine
         self.persistence_engine = persistence_engine
+        self.traversal_max_depth = traversal_max_depth
+        self.traversal_max_branching = traversal_max_branching
+        self.traversal_max_paths = traversal_max_paths
 
     # =====================================================
     # PERSISTENCE
@@ -113,27 +119,57 @@ class GraphStore:
     # GET RELATED CHAINS
     # =====================================================
 
-    def get_related_chains(self, node_text: str, depth: int = 3):
+    def get_related_chains(
+        self,
+        node_text: str,
+        depth: int | None = None,
+        max_branching: int | None = None,
+        max_paths: int | None = None,
+    ):
 
         if node_text not in self.graph:
             return []
 
+        depth = self.traversal_max_depth if depth is None else depth
+        max_branching = (
+            self.traversal_max_branching
+            if max_branching is None
+            else max_branching
+        )
+        max_paths = self.traversal_max_paths if max_paths is None else max_paths
+
         paths = []
 
         def dfs(node, path, remaining):
+            if len(paths) >= max_paths:
+                logger.debug(
+                    "Stopping chain traversal for node=%r because max_paths=%d was reached",
+                    node_text,
+                    max_paths,
+                )
+                return
 
             if remaining == 0:
                 paths.append(path)
                 return
 
-            neighbors = list(self.graph.successors(node))
+            neighbors = sorted(
+                self.graph.successors(node),
+                key=lambda neighbor: self.graph[node][neighbor].get(
+                    "frequency", 1
+                ),
+                reverse=True,
+            )
+            neighbors = [neighbor for neighbor in neighbors if neighbor not in path]
 
             if not neighbors:
                 paths.append(path)
                 return
 
-            for neighbor in neighbors:
+            for neighbor in neighbors[:max_branching]:
                 dfs(neighbor, path + [neighbor], remaining - 1)
+                if len(paths) >= max_paths:
+                    break
 
         dfs(node_text, [node_text], depth)
 

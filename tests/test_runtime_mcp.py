@@ -9,10 +9,21 @@ from driftguard import runtime as runtime_module
 
 
 class FakeGraphStore:
-    def __init__(self, merge_engine, prune_engine, persistence_engine):
+    def __init__(
+        self,
+        merge_engine,
+        prune_engine,
+        persistence_engine,
+        traversal_max_depth: int = 3,
+        traversal_max_branching: int = 10,
+        traversal_max_paths: int = 100,
+    ):
         self.merge_engine = merge_engine
         self.prune_engine = prune_engine
         self.persistence_engine = persistence_engine
+        self.traversal_max_depth = traversal_max_depth
+        self.traversal_max_branching = traversal_max_branching
+        self.traversal_max_paths = traversal_max_paths
         self.load_calls = 0
         self.save_calls = 0
         self.added_events = []
@@ -73,6 +84,9 @@ def test_build_runtime_threads_settings_into_components(monkeypatch):
         graph_filepath="custom-graph.json",
         retrieval_top_k=7,
         retrieval_min_similarity=0.77,
+        traversal_max_depth=6,
+        traversal_max_branching=4,
+        traversal_max_paths=25,
         prune_node_stale_days=12,
         prune_edge_min_frequency=4,
     )
@@ -90,6 +104,9 @@ def test_build_runtime_threads_settings_into_components(monkeypatch):
     assert runtime.prune_engine.node_stale_days == 12
     assert runtime.prune_engine.edge_min_frequency == 4
     assert runtime.persistence.filepath == "custom-graph.json"
+    assert runtime.graph_store.traversal_max_depth == 6
+    assert runtime.graph_store.traversal_max_branching == 4
+    assert runtime.graph_store.traversal_max_paths == 25
     assert runtime.retrieval_engine.top_k == 7
     assert runtime.retrieval_engine.min_similarity == 0.77
     assert runtime.graph_store.load_calls == 1

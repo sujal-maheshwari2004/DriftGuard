@@ -23,3 +23,6 @@ jobs:
 
       - name: Collect tests
         run: python -m pytest --collect-only
+
+      - name: Run test suite
+        run: python -m pytest

@@ -155,12 +155,48 @@ Useful settings include:
 - `embedding_device`
 - `retrieval_top_k`
 - `retrieval_min_similarity`
+- `traversal_max_depth`
+- `traversal_max_branching`
+- `traversal_max_paths`
 - `similarity_threshold_action`
 - `similarity_threshold_feedback`
 - `similarity_threshold_outcome`
 - `prune_node_stale_days`
 - `prune_edge_min_frequency`
 - `log_level`
+
+## End-to-End Examples
+
+### Example: MCP-style memory registration
+
+```python
+from driftguard import build_runtime
+
+runtime = build_runtime()
+runtime.register_mistake(
+    action="increase salt",
+    feedback="too salty",
+    outcome="dish ruined",
+)
+```
+
+### Example: in-process step review and recording
+
+```python
+from driftguard import DriftGuard
+
+guard = DriftGuard()
+review = guard.before_step("increase salt")
+
+if review.warnings:
+    print("Warning:", review.warnings[0].risk)
+
+guard.record(
+    action="increase salt",
+    feedback="too salty",
+    outcome="dish ruined",
+)
+```
 
 ## Development
 
@@ -186,9 +222,9 @@ DriftGuard is still early-stage, but the project now includes:
 - versioned persistence
 - targeted pytest coverage for guardrails, retrieval precision, persistence hardening, dependency failures, and runtime/MCP wiring
 
-## Remaining Work
+## CI
 
-The main remaining publishability work is:
-- final package metadata polish
-- broader CI coverage across environments
-- more end-to-end usage examples
+The repository includes a GitHub Actions workflow that:
+- installs the package with test dependencies
+- collects the test suite
+- runs the full pytest suite

@@ -110,6 +110,9 @@ def build_runtime(
         merge_engine=merge_engine,
         prune_engine=prune_engine,
         persistence_engine=persistence,
+        traversal_max_depth=settings.traversal_max_depth,
+        traversal_max_branching=settings.traversal_max_branching,
+        traversal_max_paths=settings.traversal_max_paths,
     )
     retrieval_engine = RetrievalEngine(
         graph_store,

@@ -32,6 +32,8 @@ def test_readme_documents_both_entrypoints():
     assert "DriftGuardSettings" in readme
     assert "MCP Server" in readme
     assert "In-Process Guard API" in readme
+    assert "End-to-End Examples" in readme
+    assert "guard.record(" in readme
 
 
 def test_ci_workflow_exists_and_runs_pytest_collection():
@@ -43,3 +45,17 @@ def test_ci_workflow_exists_and_runs_pytest_collection():
     assert 'python-version: "3.13"' in workflow
     assert 'pip install -e ".[test]"' in workflow
     assert "python -m pytest --collect-only" in workflow
+    assert "python -m pytest" in workflow
+
+
+def test_gitignore_covers_core_local_artifacts():
+    """.gitignore should cover the main local artifacts produced by this project."""
+
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+
+    assert ".pytest_cache/" in gitignore
+    assert ".venv/" in gitignore
+    assert "__pycache__/" in gitignore
+    assert "*.egg-info/" in gitignore
+    assert "driftguard_graph.json" in gitignore
+    assert ".vscode/" in gitignore
