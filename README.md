@@ -1,143 +1,194 @@
 # DriftGuard
 
-A semantic memory system that lets AI agents **learn from mistakes and avoid repeating them**.
+DriftGuard is a semantic mistake-memory system for AI agents. It helps agents remember what went wrong before and avoid repeating the same mistake again.
 
-DriftGuard connects to any MCP-compatible agent (like Claude) and gives it two abilities: register a causal mistake, and query memory before acting to surface relevant warnings.
+It supports two integration styles:
+- `driftguard-mcp`: an MCP server for tool-based agent integrations
+- `DriftGuard` / `guard_step(...)`: an in-process guardrail API for reviewing actions before each agent step
 
----
+## What It Stores
 
-## How It Works
+Each memory is a causal chain:
 
-Every mistake is stored as a causal chain:
-
-```
-action → feedback → outcome
-```
-
-For example:
-
-| Field    | Value           |
-|----------|-----------------|
-| action   | increase salt   |
-| feedback | too salty       |
-| outcome  | dish ruined     |
-
-When the agent is about to do something, it queries DriftGuard with the current context. DriftGuard searches its memory graph for semantically similar past actions and returns warnings — even if the wording is different.
-
-> *"add more salt"* will match *"increase salt"* because DriftGuard uses sentence embeddings, not keyword matching.
-
----
-
-## Architecture
-
-```
-server.py               ← MCP server (FastMCP)
-│
-├── models/
-│   ├── event.py        ← Event dataclass (action, feedback, outcome)
-│   └── response.py     ← RetrievalResponse + Warning dataclasses
-│
-├── graph/
-│   ├── graph_store.py  ← NetworkX DiGraph — core memory store
-│   ├── merge_engine.py ← Semantic deduplication via embeddings
-│   └── prune_engine.py ← Graph hygiene (stale/weak/isolated removal)
-│
-├── embedding/
-│   └── embedding_engine.py  ← sentence-transformers wrapper
-│
-├── retrieval/
-│   └── retrieval_engine.py  ← Query → warnings pipeline
-│
-├── storage/
-│   └── persistence.py  ← JSON-based graph persistence (no pickle)
-│
-└── utils/
-    ├── normalization.py ← spaCy lemmatization (lazy-loaded)
-    └── similarity.py    ← Cosine similarity with zero-vector guard
+```text
+action -> feedback -> outcome
 ```
 
----
+Example:
+- action: `increase salt`
+- feedback: `too salty`
+- outcome: `dish ruined`
 
-## MCP Tools
+Before an agent acts, DriftGuard can query past memories and return warnings based on semantic similarity instead of exact wording. That means `"add more salt"` can still match `"increase salt"`.
 
-| Tool | Description |
-|---|---|
-| `register_mistake` | Store a causal event (action, feedback, outcome) |
-| `query_memory` | Retrieve warnings relevant to a current context |
-| `deep_prune` | Run a full graph cleanup pass |
-| `graph_stats` | Return current node and edge counts |
+## Entry Points
 
----
+### 1. MCP Server
 
-## Quickstart
-
-### 1. Install dependencies
+Run the packaged MCP entrypoint:
 
 ```bash
-pip install -r requirements.txt
-python -m spacy download en_core_web_sm
+driftguard-mcp
 ```
 
-### 2. Run the MCP server
+Or locally from the repo:
 
 ```bash
 python server.py
 ```
 
-### 3. Connect to Claude Desktop
+Available MCP tools:
+- `register_mistake`
+- `query_memory`
+- `deep_prune`
+- `graph_stats`
 
-Add this to your `claude_desktop_config.json`:
+Example Claude Desktop config:
 
 ```json
 {
   "mcpServers": {
     "driftguard": {
-      "command": "python",
-      "args": ["/path/to/driftguard/server.py"]
+      "command": "driftguard-mcp"
     }
   }
 }
 ```
 
----
+### 2. In-Process Guard API
+
+Use the shared runtime directly inside an agent loop:
+
+```python
+from driftguard import DriftGuard
+
+guard = DriftGuard()
+
+review = guard.before_step("increase salt")
+if review.warnings:
+    print(review.warnings[0].risk)
+```
+
+Decorator form:
+
+```python
+from driftguard import DriftGuard, guard_step
+
+guard = DriftGuard()
+
+@guard_step(guard, input_getter=lambda payload: payload["next_action"])
+def agent_step(payload: dict):
+    return payload["next_action"]
+```
+
+## Architecture
+
+Current package layout:
+
+```text
+src/driftguard/
+  config.py
+  errors.py
+  guard.py
+  logging_config.py
+  mcp.py
+  runtime.py
+  server.py
+  embedding/
+  graph/
+  models/
+  retrieval/
+  storage/
+  utils/
+```
+
+Key pieces:
+- `runtime.py`: shared construction and operational core
+- `mcp.py`: MCP server factory
+- `guard.py`: in-process guard and decorator entrypoint
+- `storage/persistence.py`: versioned JSON persistence with backward-compatible loads
+- `graph/merge_engine.py`: semantic matching and deduplication
+- `retrieval/retrieval_engine.py`: warning generation and confidence scoring
+
+## Installation
+
+Install the package:
+
+```bash
+pip install .
+```
+
+Install test dependencies:
+
+```bash
+pip install ".[test]"
+```
+
+Install the spaCy model used for normalization:
+
+```bash
+python -m spacy download en_core_web_sm
+```
+
+If DriftGuard cannot load the embedding model or spaCy model, it now raises DriftGuard-specific dependency errors with setup guidance.
 
 ## Configuration
 
-Edit `config.py` to tune how aggressively nodes are deduplicated:
+DriftGuard uses a shared settings object:
 
 ```python
-SIM_THRESHOLD_ACTION   = 0.72   # lower = more merging
-SIM_THRESHOLD_FEEDBACK = 0.70
-SIM_THRESHOLD_OUTCOME  = 0.88   # higher = stricter (outcomes matter more)
+from driftguard import DriftGuardSettings, build_runtime
+
+settings = DriftGuardSettings(
+    graph_filepath="driftguard_graph.json",
+    retrieval_top_k=5,
+    retrieval_min_similarity=0.60,
+    similarity_threshold_action=0.72,
+)
+
+runtime = build_runtime(settings=settings)
 ```
 
----
+Useful settings include:
+- `graph_filepath`
+- `embedding_model_name`
+- `embedding_device`
+- `retrieval_top_k`
+- `retrieval_min_similarity`
+- `similarity_threshold_action`
+- `similarity_threshold_feedback`
+- `similarity_threshold_outcome`
+- `prune_node_stale_days`
+- `prune_edge_min_frequency`
+- `log_level`
 
-## Running Tests
+## Development
+
+Run tests:
 
 ```bash
-pytest tests/ -v
+python -m pytest
 ```
 
----
+Collect tests only:
 
-## Design Decisions
+```bash
+python -m pytest --collect-only
+```
 
-**Why JSON instead of pickle?**
-Pickle is unsafe with untrusted data, breaks across Python versions, and silently corrupts if classes are renamed. DriftGuard uses `networkx`'s node-link JSON format — human-readable, portable, and safe.
+## Current Status
 
-**Why sentence embeddings instead of keyword matching?**
-Agents rarely repeat mistakes in identical words. Embedding similarity catches paraphrases, synonyms, and intent-equivalent actions that keyword matching would miss.
+DriftGuard is still early-stage, but the project now includes:
+- real `src` package layout
+- shared runtime architecture
+- dual entrypoints
+- centralized logging
+- versioned persistence
+- targeted pytest coverage for guardrails, retrieval precision, persistence hardening, dependency failures, and runtime/MCP wiring
 
-**Why a graph instead of a vector store?**
-Causal chains matter. A flat vector store can tell you *"this action is risky"* but not *"this action caused this feedback which led to this outcome."* The graph preserves causality so warnings include the full chain of consequences.
+## Remaining Work
 
-**Why two prune modes?**
-`light_prune` runs after every insert and stays intentionally cheap — a placeholder for hard caps or quick guards. `deep_prune` is the full cleanup and should run on a schedule. Mixing them would slow every insertion.
-
----
-
-## Requirements
-
-- Python 3.13+
-- See `requirements.txt` for full dependency list
+The main remaining publishability work is:
+- final package metadata polish
+- broader CI coverage across environments
+- more end-to-end usage examples

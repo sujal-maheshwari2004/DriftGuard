@@ -5,22 +5,45 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "driftguard"
 version = "0.1.0"
-description = "Add your description here"
+description = "A semantic mistake-memory system for agents with MCP and in-process guardrail entrypoints."
 readme = "README.md"
 requires-python = ">=3.13"
+keywords = ["agents", "mcp", "memory", "guardrails", "retrieval"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "fastmcp>=3.2.0",
     "networkx>=3.6.1",
     "numpy>=2.4.4",
     "orjson>=3.11.8",
     "pydantic>=2.12.5",
-    "pytest>=9.0.2",
     "python-dateutil>=2.9.0.post0",
     "rich>=14.3.3",
     "sentence-transformers>=5.3.0",
     "spacy>=3.8.14",
     "sqlite-utils>=3.39",
     "tenacity>=9.1.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/sujal-maheshwari2004/DriftGuard"
+Repository = "https://github.com/sujal-maheshwari2004/DriftGuard"
+Issues = "https://github.com/sujal-maheshwari2004/DriftGuard/issues"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=9.0.2",
+]
+dev = [
+    "build>=1.2.2.post1",
+    "pytest>=9.0.2",
 ]
 
 [project.scripts]
