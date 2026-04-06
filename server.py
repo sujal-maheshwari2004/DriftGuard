@@ -1,13 +1,10 @@
 from fastmcp import FastMCP
 
 from DriftGuard.models.event import Event
-
 from DriftGuard.graph.graph_store import GraphStore
 from DriftGuard.graph.merge_engine import MergeEngine
 from DriftGuard.graph.prune_engine import PruneEngine
-
 from DriftGuard.storage.persistence import Persistence
-
 from DriftGuard.retrieval.retrieval_engine import RetrievalEngine
 
 
@@ -16,9 +13,7 @@ from DriftGuard.retrieval.retrieval_engine import RetrievalEngine
 # =====================================================
 
 merge_engine = MergeEngine()
-
 prune_engine = PruneEngine()
-
 persistence = Persistence()
 
 graph_store = GraphStore(
@@ -51,6 +46,11 @@ def register_mistake(
 ):
     """
     Register a causal mistake event into DriftGuard memory.
+
+    Args:
+        action:   What was done (e.g. "increase salt")
+        feedback: The signal received (e.g. "too salty")
+        outcome:  The result (e.g. "dish ruined")
     """
 
     event = Event(
@@ -60,19 +60,13 @@ def register_mistake(
     )
 
     graph_store.add_event(event)
-
     graph_store.save()
 
     return {
-
         "status": "stored",
-
         "action": action,
-
         "feedback": feedback,
-
         "outcome": outcome,
-
     }
 
 
@@ -83,37 +77,66 @@ def register_mistake(
 @mcp.tool()
 def query_memory(context: str):
     """
-    Retrieve warnings from DriftGuard memory graph.
+    Retrieve causal warnings from DriftGuard memory.
+
+    Args:
+        context: The current action or situation being considered.
     """
 
     response = retrieval_engine.query(context)
 
     return {
-
         "query": response.query,
-
         "warnings": [
-
             {
-
                 "trigger": w.trigger,
-
                 "risk": w.risk,
-
                 "frequency": w.frequency,
-
                 "confidence": w.confidence,
-
             }
-
             for w in response.warnings
         ],
-
         "chains": response.chains,
-
         "confidence": response.confidence,
-
     }
+
+
+# =====================================================
+# TOOL: DEEP PRUNE (maintenance)
+# =====================================================
+
+@mcp.tool()
+def deep_prune():
+    """
+    Run a full graph cleanup pass.
+
+    Removes weak edges, stale nodes, and isolated nodes.
+    Call occasionally to keep the memory graph healthy.
+    """
+
+    before = graph_store.stats()
+    prune_engine.deep_prune(graph_store.graph)
+    graph_store.save()
+    after = graph_store.stats()
+
+    return {
+        "status": "pruned",
+        "before": before,
+        "after": after,
+    }
+
+
+# =====================================================
+# TOOL: GRAPH STATS
+# =====================================================
+
+@mcp.tool()
+def graph_stats():
+    """
+    Return current memory graph statistics.
+    """
+
+    return graph_store.stats()
 
 
 # =====================================================
@@ -121,5 +144,4 @@ def query_memory(context: str):
 # =====================================================
 
 if __name__ == "__main__":
-
     mcp.run()

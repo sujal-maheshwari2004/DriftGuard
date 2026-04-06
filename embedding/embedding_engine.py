@@ -6,29 +6,23 @@ class EmbeddingEngine:
     Central embedding interface for DriftGuard.
 
     Responsibilities:
-    - provide sentence embeddings
-    - allow easy backend swapping later
-    - support batch embedding
+    - Provide sentence embeddings
+    - Allow easy backend swapping later
+    - Support batch embedding
 
     Future upgrade targets:
     - OpenAI embeddings
     - Azure embeddings
     - Instructor models
-    - local GGUF encoders
+    - Local GGUF encoders
     """
 
     def __init__(
         self,
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        device=None,
+        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        device: str = None,
     ):
-        """
-        model_name:
-            SentenceTransformer model identifier
-
-        device:
-            "cpu", "cuda", or None (auto-detect)
-        """
+        self._model_name = model_name
 
         self.model = SentenceTransformer(
             model_name,
@@ -55,7 +49,7 @@ class EmbeddingEngine:
 
     def embed_batch(self, texts):
         """
-        Generate embeddings for multiple strings.
+        Generate embeddings for a list of strings.
         """
 
         return self.model.encode(
@@ -64,12 +58,13 @@ class EmbeddingEngine:
         )
 
     # =====================================================
-    # MODEL INFO (optional helper)
+    # MODEL INFO
     # =====================================================
 
-    def model_name(self):
+    def model_name(self) -> str:
         """
         Return active embedding model name.
+        Stored at init — avoids accessing private internals.
         """
 
-        return self.model._first_module().auto_model.config._name_or_path
+        return self._model_name
