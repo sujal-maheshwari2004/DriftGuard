@@ -87,19 +87,25 @@ class GraphStore:
         text: str,
         node_type: str = None,
         top_k: int = 5,
+        min_similarity: float = 0.0,
+        include_scores: bool = False,
     ):
         matches = self.merge_engine.find_top_k_similar(
             text,
             self.graph,
             node_type,
             top_k,
+            min_similarity,
+            include_scores,
         )
         logger.debug(
-            "Similarity search text=%r node_type=%r top_k=%d matches=%d",
+            "Similarity search text=%r node_type=%r top_k=%d matches=%d min_similarity=%.2f include_scores=%s",
             text,
             node_type,
             top_k,
             len(matches),
+            min_similarity,
+            include_scores,
         )
         return matches
 

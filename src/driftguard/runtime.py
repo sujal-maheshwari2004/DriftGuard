@@ -111,7 +111,11 @@ def build_runtime(
         prune_engine=prune_engine,
         persistence_engine=persistence,
     )
-    retrieval_engine = RetrievalEngine(graph_store)
+    retrieval_engine = RetrievalEngine(
+        graph_store,
+        top_k=settings.retrieval_top_k,
+        min_similarity=settings.retrieval_min_similarity,
+    )
 
     runtime = DriftGuardRuntime(
         settings=settings,

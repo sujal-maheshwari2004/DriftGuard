@@ -112,7 +112,9 @@ class MergeEngine:
         graph,
         node_type: str = None,
         top_k: int = 5,
-    ) -> list[str]:
+        min_similarity: float = 0.0,
+        include_scores: bool = False,
+    ) -> list[str] | list[tuple[str, float]]:
         """
         Return top-k most similar nodes.
 
@@ -139,13 +141,27 @@ class MergeEngine:
         scores = embeddings @ query_emb  # cosine sim (embeddings are normalized)
 
         top_indices = np.argsort(scores)[::-1][:top_k]
-        results = [candidates[i] for i in top_indices]
+        results = []
+
+        for index in top_indices:
+            score = float(scores[index])
+
+            if score < min_similarity:
+                continue
+
+            if include_scores:
+                results.append((candidates[index], score))
+            else:
+                results.append(candidates[index])
+
         logger.debug(
-            "Top-k lookup text=%r node_type=%r candidates=%d returned=%d",
+            "Top-k lookup text=%r node_type=%r candidates=%d returned=%d min_similarity=%.2f include_scores=%s",
             text,
             node_type,
             len(candidates),
             len(results),
+            min_similarity,
+            include_scores,
         )
         return results
 

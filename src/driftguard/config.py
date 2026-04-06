@@ -7,6 +7,7 @@ class DriftGuardSettings:
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_device: str | None = None
     retrieval_top_k: int = 5
+    retrieval_min_similarity: float = 0.60
     similarity_threshold_action: float = 0.72
     similarity_threshold_feedback: float = 0.70
     similarity_threshold_outcome: float = 0.88
