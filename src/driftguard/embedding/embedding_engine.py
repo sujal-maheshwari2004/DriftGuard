@@ -1,5 +1,10 @@
 from sentence_transformers import SentenceTransformer
 
+from driftguard.logging_config import get_logger
+
+
+logger = get_logger(__name__)
+
 
 class EmbeddingEngine:
     """
@@ -23,11 +28,17 @@ class EmbeddingEngine:
         device: str = None,
     ):
         self._model_name = model_name
+        logger.info(
+            "Loading embedding model model_name=%s device=%s",
+            model_name,
+            device,
+        )
 
         self.model = SentenceTransformer(
             model_name,
             device=device,
         )
+        logger.info("Embedding model ready model_name=%s", model_name)
 
     # =====================================================
     # SINGLE EMBEDDING
@@ -38,6 +49,7 @@ class EmbeddingEngine:
         Generate embedding for a single string.
         """
 
+        logger.debug("Embedding single text length=%d", len(text))
         return self.model.encode(
             text,
             normalize_embeddings=True,
@@ -52,6 +64,7 @@ class EmbeddingEngine:
         Generate embeddings for a list of strings.
         """
 
+        logger.debug("Embedding batch size=%d", len(texts))
         return self.model.encode(
             texts,
             normalize_embeddings=True,

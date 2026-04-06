@@ -3,12 +3,16 @@ import numpy as np
 from driftguard.embedding.embedding_engine import EmbeddingEngine
 from driftguard.utils.normalization import normalize_text
 from driftguard.utils.similarity import cosine_similarity
+from driftguard.logging_config import get_logger
 
 from driftguard.config import (
     SIM_THRESHOLD_ACTION,
     SIM_THRESHOLD_FEEDBACK,
     SIM_THRESHOLD_OUTCOME,
 )
+
+
+logger = get_logger(__name__)
 
 
 class MergeEngine:
@@ -24,6 +28,10 @@ class MergeEngine:
 
     def __init__(self):
         self.embedding_engine = EmbeddingEngine()
+        logger.info(
+            "Merge engine ready with embedding_model=%s",
+            self.embedding_engine.model_name(),
+        )
 
     # =====================================================
     # NORMALIZATION
@@ -61,6 +69,7 @@ class MergeEngine:
         ]
 
         if not candidates:
+            logger.debug("No candidates available for node_type=%r", node_type)
             return None
 
         query_emb = self.embed(text)
@@ -79,6 +88,14 @@ class MergeEngine:
                 best_score = score
                 best_node = node
 
+        logger.debug(
+            "Best match lookup text=%r node_type=%r candidates=%d matched=%r score=%.4f",
+            text,
+            node_type,
+            len(candidates),
+            best_node,
+            best_score,
+        )
         return best_node
 
     # =====================================================
@@ -105,6 +122,7 @@ class MergeEngine:
         ]
 
         if not candidates:
+            logger.debug("Top-k lookup found no candidates for node_type=%r", node_type)
             return []
 
         query_emb = self.embed(text)
@@ -117,8 +135,15 @@ class MergeEngine:
         scores = embeddings @ query_emb  # cosine sim (embeddings are normalized)
 
         top_indices = np.argsort(scores)[::-1][:top_k]
-
-        return [candidates[i] for i in top_indices]
+        results = [candidates[i] for i in top_indices]
+        logger.debug(
+            "Top-k lookup text=%r node_type=%r candidates=%d returned=%d",
+            text,
+            node_type,
+            len(candidates),
+            len(results),
+        )
+        return results
 
     # =====================================================
     # INTERNAL: THRESHOLD LOOKUP

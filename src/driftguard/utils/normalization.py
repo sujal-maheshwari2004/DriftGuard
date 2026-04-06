@@ -1,6 +1,9 @@
 import spacy
 
+from driftguard.logging_config import get_logger
+
 _nlp = None
+logger = get_logger(__name__)
 
 
 def _get_nlp():
@@ -12,6 +15,7 @@ def _get_nlp():
     global _nlp
 
     if _nlp is None:
+        logger.info("Loading spaCy normalization model en_core_web_sm")
         _nlp = spacy.load("en_core_web_sm")
 
     return _nlp
@@ -32,4 +36,6 @@ def normalize_text(text: str) -> str:
         if not token.is_stop and not token.is_punct
     ]
 
-    return " ".join(lemmas)
+    normalized = " ".join(lemmas)
+    logger.debug("Normalized text %r -> %r", text, normalized)
+    return normalized

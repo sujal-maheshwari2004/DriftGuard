@@ -3,7 +3,12 @@ import numpy as np
 import networkx as nx
 
 from pathlib import Path
-from datetime import datetime, UTC
+from datetime import datetime
+
+from driftguard.logging_config import get_logger
+
+
+logger = get_logger(__name__)
 
 
 # =====================================================
@@ -48,6 +53,7 @@ class Persistence:
     def __init__(self, filepath: str = "driftguard_graph.json"):
 
         self.filepath = Path(filepath)
+        logger.info("Persistence configured with filepath=%s", self.filepath)
 
     # =====================================================
     # SAVE
@@ -61,6 +67,12 @@ class Persistence:
 
         with open(self.filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, cls=_GraphEncoder, indent=2)
+        logger.info(
+            "Saved graph to %s nodes=%d edges=%d",
+            self.filepath,
+            graph.number_of_nodes(),
+            graph.number_of_edges(),
+        )
 
     # =====================================================
     # LOAD
@@ -69,6 +81,7 @@ class Persistence:
     def load_graph(self) -> nx.DiGraph | None:
 
         if not self.filepath.exists():
+            logger.info("Persistence file does not exist at %s", self.filepath)
             return None
 
         with open(self.filepath, "r", encoding="utf-8") as f:
@@ -101,4 +114,10 @@ class Persistence:
                     edge_data["created_at"]
                 )
 
+        logger.info(
+            "Loaded graph from %s nodes=%d edges=%d",
+            self.filepath,
+            graph.number_of_nodes(),
+            graph.number_of_edges(),
+        )
         return graph

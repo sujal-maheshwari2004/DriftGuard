@@ -6,11 +6,17 @@ from driftguard.graph.merge_engine import MergeEngine
 from driftguard.graph.prune_engine import PruneEngine
 from driftguard.storage.persistence import Persistence
 from driftguard.retrieval.retrieval_engine import RetrievalEngine
+from driftguard.logging_config import configure_logging, get_logger
+
+
+logger = get_logger(__name__)
 
 
 # =====================================================
 # INITIALIZE MEMORY STACK
 # =====================================================
+
+logger.info("Initializing DriftGuard runtime components")
 
 merge_engine = MergeEngine()
 prune_engine = PruneEngine()
@@ -25,6 +31,7 @@ graph_store = GraphStore(
 retrieval_engine = RetrievalEngine(graph_store)
 
 graph_store.load()
+logger.info("DriftGuard graph loaded with stats=%s", graph_store.stats())
 
 
 # =====================================================
@@ -53,6 +60,13 @@ def register_mistake(
         outcome:  The result (e.g. "dish ruined")
     """
 
+    logger.info(
+        "Registering mistake action=%r feedback=%r outcome=%r",
+        action,
+        feedback,
+        outcome,
+    )
+
     event = Event(
         action=action,
         feedback=feedback,
@@ -61,6 +75,7 @@ def register_mistake(
 
     graph_store.add_event(event)
     graph_store.save()
+    logger.info("Mistake stored successfully; stats=%s", graph_store.stats())
 
     return {
         "status": "stored",
@@ -83,7 +98,15 @@ def query_memory(context: str):
         context: The current action or situation being considered.
     """
 
+    logger.info("Querying memory for context=%r", context)
     response = retrieval_engine.query(context)
+    logger.info(
+        "Query complete context=%r warnings=%d chains=%d confidence=%.2f",
+        context,
+        len(response.warnings),
+        len(response.chains),
+        response.confidence,
+    )
 
     return {
         "query": response.query,
@@ -115,9 +138,11 @@ def deep_prune():
     """
 
     before = graph_store.stats()
+    logger.info("Starting deep prune with stats=%s", before)
     prune_engine.deep_prune(graph_store.graph)
     graph_store.save()
     after = graph_store.stats()
+    logger.info("Deep prune finished with stats=%s", after)
 
     return {
         "status": "pruned",
@@ -136,7 +161,9 @@ def graph_stats():
     Return current memory graph statistics.
     """
 
-    return graph_store.stats()
+    stats = graph_store.stats()
+    logger.debug("Graph stats requested: %s", stats)
+    return stats
 
 
 # =====================================================
@@ -144,6 +171,8 @@ def graph_stats():
 # =====================================================
 
 def main():
+    configure_logging()
+    logger.info("Starting DriftGuard MCP server")
     mcp.run()
 
 

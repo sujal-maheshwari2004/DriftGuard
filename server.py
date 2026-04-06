@@ -9,8 +9,10 @@ if str(SRC_DIR) not in sys.path:
 
 
 def main():
+    from driftguard.logging_config import configure_logging
     from driftguard.server import main as run_server
 
+    configure_logging()
     run_server()
 
 

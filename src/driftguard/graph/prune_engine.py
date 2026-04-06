@@ -1,5 +1,10 @@
 from datetime import datetime, UTC, timedelta
 
+from driftguard.logging_config import get_logger
+
+
+logger = get_logger(__name__)
+
 
 class PruneEngine:
     """
@@ -47,7 +52,7 @@ class PruneEngine:
         Heavy operations belong in deep_prune.
         """
 
-        pass
+        logger.debug("Light prune invoked; no-op with current policy")
 
     # =====================================================
     # DEEP PRUNE
@@ -63,9 +68,20 @@ class PruneEngine:
         3. Then isolated nodes
         """
 
+        before = {
+            "nodes": graph.number_of_nodes(),
+            "edges": graph.number_of_edges(),
+        }
+
         self._remove_weak_edges(graph)
         self._remove_stale_nodes(graph)
         self._remove_isolated_nodes(graph)
+
+        after = {
+            "nodes": graph.number_of_nodes(),
+            "edges": graph.number_of_edges(),
+        }
+        logger.info("Deep prune completed before=%s after=%s", before, after)
 
     # =====================================================
     # REMOVE WEAK EDGES

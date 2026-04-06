@@ -2,6 +2,11 @@ import networkx as nx
 
 from datetime import datetime, UTC
 
+from driftguard.logging_config import get_logger
+
+
+logger = get_logger(__name__)
+
 
 class GraphStore:
     """
@@ -34,6 +39,7 @@ class GraphStore:
     def save(self):
         """Persist current graph to disk."""
 
+        logger.debug("Saving graph with stats=%s", self.stats())
         self.persistence_engine.save_graph(self.graph)
 
     def load(self):
@@ -43,12 +49,16 @@ class GraphStore:
 
         if loaded is not None:
             self.graph = loaded
+            logger.info("Loaded graph from persistence with stats=%s", self.stats())
+        else:
+            logger.info("No persisted graph found; starting with an empty graph")
 
     # =====================================================
     # ADD EVENT
     # =====================================================
 
     def add_event(self, event):
+        before = self.stats()
 
         action = self._get_or_create_node(event.action, "action")
         feedback = self._get_or_create_node(event.feedback, "feedback")
@@ -59,6 +69,14 @@ class GraphStore:
 
         # light_prune is intentionally minimal — only run deep_prune on schedule
         self.prune_engine.light_prune(self.graph)
+        logger.info(
+            "Added event action=%r feedback=%r outcome=%r stats_before=%s stats_after=%s",
+            action,
+            feedback,
+            outcome,
+            before,
+            self.stats(),
+        )
 
     # =====================================================
     # FIND SIMILAR NODES
@@ -70,12 +88,20 @@ class GraphStore:
         node_type: str = None,
         top_k: int = 5,
     ):
-        return self.merge_engine.find_top_k_similar(
+        matches = self.merge_engine.find_top_k_similar(
             text,
             self.graph,
             node_type,
             top_k,
         )
+        logger.debug(
+            "Similarity search text=%r node_type=%r top_k=%d matches=%d",
+            text,
+            node_type,
+            top_k,
+            len(matches),
+        )
+        return matches
 
     # =====================================================
     # GET RELATED CHAINS
@@ -142,6 +168,13 @@ class GraphStore:
             node = self.graph.nodes[existing]
             node["frequency"] += 1
             node["last_seen"] = datetime.now(UTC)
+            logger.debug(
+                "Merged %r into existing %s node=%r frequency=%d",
+                text,
+                node_type,
+                existing,
+                node["frequency"],
+            )
             return existing
 
         return self._create_node(normalized, node_type)
@@ -164,6 +197,7 @@ class GraphStore:
             last_seen=now,
         )
 
+        logger.debug("Created new %s node=%r", node_type, text)
         return text
 
     # =====================================================
@@ -174,6 +208,12 @@ class GraphStore:
 
         if self.graph.has_edge(src, dst):
             self.graph[src][dst]["frequency"] += 1
+            logger.debug(
+                "Incremented edge %r -> %r frequency=%d",
+                src,
+                dst,
+                self.graph[src][dst]["frequency"],
+            )
 
         else:
             self.graph.add_edge(
@@ -183,3 +223,4 @@ class GraphStore:
                 weight=1.0,
                 created_at=datetime.now(UTC),
             )
+            logger.debug("Created edge %r -> %r", src, dst)

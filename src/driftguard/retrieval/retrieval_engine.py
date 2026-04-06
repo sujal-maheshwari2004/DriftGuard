@@ -1,6 +1,8 @@
-from datetime import datetime, UTC
-
+from driftguard.logging_config import get_logger
 from driftguard.models.response import Warning, RetrievalResponse
+
+
+logger = get_logger(__name__)
 
 
 class RetrievalEngine:
@@ -16,6 +18,7 @@ class RetrievalEngine:
     def __init__(self, graph_store):
 
         self.graph_store = graph_store
+        logger.info("Retrieval engine initialized")
 
     # =====================================================
     # MAIN ENTRYPOINT
@@ -34,12 +37,21 @@ class RetrievalEngine:
             chains.extend(self.graph_store.get_related_chains(node))
 
         warnings = self._build_warnings(chains)
+        confidence = min(1.0, 0.6 + 0.1 * len(chains))
+        logger.info(
+            "Retrieval query context=%r candidates=%d chains=%d warnings=%d confidence=%.2f",
+            context,
+            len(candidate_nodes),
+            len(chains),
+            len(warnings),
+            confidence,
+        )
 
         return RetrievalResponse(
             query=context,
             warnings=warnings,
             chains=chains,
-            confidence=min(1.0, 0.6 + 0.1 * len(chains)),
+            confidence=confidence,
         )
 
     # =====================================================
