@@ -36,15 +36,22 @@ def test_readme_documents_both_entrypoints():
     assert "driftguard-mcp" in readme
     assert "guard_step" in readme
     assert "DriftGuardSettings" in readme
-    assert "MCP Server" in readme
-    assert "In-Process Guard API" in readme
-    assert "End-to-End Examples" in readme
+    assert "Option 1: MCP Server" in readme
+    assert "Option 2: In-Process Guard API" in readme
+    assert "Guard Policies" in readme
+    assert "Adapters" in readme
+    assert "review_payload" in readme
+    assert "make_langgraph_review_node" in readme
+    assert "Metrics and Observability" in readme
+    assert "guard_metrics" in readme
+    assert "Evaluation and Benchmarking" in readme
     assert "guard.record(" in readme
-    assert "Local Demo" in readme
+    assert "Local Demos" in readme
     assert "demo/rule_based" in readme
     assert "demo/langgraph" in readme
     assert ".[demo]" in readme
     assert "driftguard-benchmark" in readme
+    assert "storage_backend=\"sqlite\"" in readme
 
 
 def test_ci_workflow_exists_and_runs_pytest_collection():
