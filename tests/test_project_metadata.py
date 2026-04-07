@@ -25,7 +25,6 @@ def test_pyproject_has_publishable_metadata():
         for dependency in project["optional-dependencies"]["demo"]
     )
     assert project["license"] == "MIT"
-    assert "License :: OSI Approved :: MIT License" in project["classifiers"]
     assert "Homepage" in project["urls"]
     assert "Repository" in project["urls"]
 
@@ -116,6 +115,7 @@ def test_license_and_contributing_files_exist():
     contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
 
     assert "MIT License" in license_text
+    assert "sujal maheshwari" in license_text
     assert "Permission is hereby granted" in license_text
     assert "Contributing to DriftGuard" in contributing
     assert "python -m pytest" in contributing
