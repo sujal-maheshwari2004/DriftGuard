@@ -54,6 +54,7 @@ dev = [
 
 [project.scripts]
 driftguard-mcp = "driftguard.server:main"
+driftguard-benchmark = "driftguard.benchmark:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

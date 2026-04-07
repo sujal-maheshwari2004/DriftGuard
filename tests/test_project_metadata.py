@@ -17,6 +17,7 @@ def test_pyproject_has_publishable_metadata():
     assert "Add your description here" not in project["description"]
     assert "pytest>=9.0.2" not in project["dependencies"]
     assert project["scripts"]["driftguard-mcp"] == "driftguard.server:main"
+    assert project["scripts"]["driftguard-benchmark"] == "driftguard.benchmark:main"
     assert "test" in project["optional-dependencies"]
     assert "demo" in project["optional-dependencies"]
     assert any(
@@ -43,6 +44,7 @@ def test_readme_documents_both_entrypoints():
     assert "demo/rule_based" in readme
     assert "demo/langgraph" in readme
     assert ".[demo]" in readme
+    assert "driftguard-benchmark" in readme
 
 
 def test_ci_workflow_exists_and_runs_pytest_collection():

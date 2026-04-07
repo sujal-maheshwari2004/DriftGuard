@@ -1,6 +1,16 @@
 __version__ = "0.1.0"
 
 from driftguard.config import DEFAULT_SETTINGS, DriftGuardSettings
+from driftguard.benchmark import (
+    BenchmarkMergeEngine,
+    BenchmarkSuite,
+    BenchmarkEmbeddingEngine,
+    benchmark_report_to_dict,
+    builtin_benchmark_suite,
+    build_benchmark_runtime,
+    format_benchmark_report,
+    run_builtin_benchmark,
+)
 from driftguard.errors import (
     DriftGuardDependencyError,
     DriftGuardError,
