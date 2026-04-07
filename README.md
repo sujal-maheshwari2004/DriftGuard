@@ -239,6 +239,10 @@ Collect tests only:
 python -m pytest --collect-only
 ```
 
+## Evaluation
+
+DriftGuard now includes a lightweight benchmark harness for merge and retrieval quality. You can define benchmark cases and score precision / recall / F1 over semantic merges and warning retrieval, which makes it easier to catch quality regressions as the project evolves.
+
 ## Current Status
 
 DriftGuard is still early-stage, but the project now includes:

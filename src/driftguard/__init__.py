@@ -7,6 +7,18 @@ from driftguard.errors import (
     EmbeddingDependencyError,
     NormalizationDependencyError,
 )
+from driftguard.evaluation import (
+    BenchmarkSuiteReport,
+    MergeBenchmarkCase,
+    MergeBenchmarkResult,
+    MetricSummary,
+    RetrievalBenchmarkCase,
+    RetrievalBenchmarkResult,
+    evaluate_benchmark_suite,
+    evaluate_merge_cases,
+    evaluate_retrieval_cases,
+    metric_summary,
+)
 from driftguard.logging_config import configure_logging
 from driftguard.guard import DriftGuard, GuardrailTriggered, guard_step
 from driftguard.mcp import create_mcp_server
