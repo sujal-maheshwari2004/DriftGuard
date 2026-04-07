@@ -62,6 +62,11 @@ class FakePersistence:
         self.filepath = filepath
 
 
+class FakeSQLitePersistence:
+    def __init__(self, filepath: str):
+        self.filepath = filepath
+
+
 class FakeRetrievalEngine:
     def __init__(self, graph_store, top_k: int, min_similarity: float):
         self.graph_store = graph_store
@@ -127,6 +132,25 @@ def test_build_runtime_can_skip_auto_load(monkeypatch):
     )
 
     assert runtime.graph_store.load_calls == 0
+
+
+def test_build_runtime_selects_sqlite_persistence_from_settings(monkeypatch):
+    settings = DriftGuardSettings(
+        storage_backend="sqlite",
+        sqlite_filepath="custom-graph.sqlite3",
+    )
+
+    monkeypatch.setattr(runtime_module, "MergeEngine", FakeMergeEngine)
+    monkeypatch.setattr(runtime_module, "PruneEngine", FakePruneEngine)
+    monkeypatch.setattr(runtime_module, "Persistence", FakePersistence)
+    monkeypatch.setattr(runtime_module, "SQLitePersistence", FakeSQLitePersistence)
+    monkeypatch.setattr(runtime_module, "GraphStore", FakeGraphStore)
+    monkeypatch.setattr(runtime_module, "RetrievalEngine", FakeRetrievalEngine)
+
+    runtime = runtime_module.build_runtime(settings=settings)
+
+    assert isinstance(runtime.persistence, FakeSQLitePersistence)
+    assert runtime.persistence.filepath == "custom-graph.sqlite3"
 
 
 def test_runtime_register_query_prune_and_stats_delegate_to_components():

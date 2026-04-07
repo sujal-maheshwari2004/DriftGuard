@@ -4,6 +4,8 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class DriftGuardSettings:
     graph_filepath: str = "driftguard_graph.json"
+    storage_backend: str = "json"
+    sqlite_filepath: str = "driftguard_graph.sqlite3"
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_device: str | None = None
     retrieval_top_k: int = 5

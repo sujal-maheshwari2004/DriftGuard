@@ -7,7 +7,9 @@ from driftguard.graph.prune_engine import PruneEngine
 from driftguard.logging_config import get_logger
 from driftguard.models.event import Event
 from driftguard.retrieval.retrieval_engine import RetrievalEngine
+from driftguard.storage.base import GraphPersistence
 from driftguard.storage.persistence import Persistence
+from driftguard.storage.sqlite_persistence import SQLitePersistence
 
 
 logger = get_logger(__name__)
@@ -18,7 +20,7 @@ class DriftGuardRuntime:
     settings: DriftGuardSettings
     merge_engine: MergeEngine
     prune_engine: PruneEngine
-    persistence: Persistence
+    persistence: GraphPersistence
     graph_store: GraphStore
     retrieval_engine: RetrievalEngine
 
@@ -92,7 +94,7 @@ def build_runtime(
     settings: DriftGuardSettings | None = None,
     merge_engine: MergeEngine | None = None,
     prune_engine: PruneEngine | None = None,
-    persistence: Persistence | None = None,
+    persistence: GraphPersistence | None = None,
     auto_load: bool = True,
 ) -> DriftGuardRuntime:
     logger.info("Building DriftGuard runtime")
@@ -104,7 +106,7 @@ def build_runtime(
         node_stale_days=settings.prune_node_stale_days,
         edge_min_frequency=settings.prune_edge_min_frequency,
     )
-    persistence = persistence or Persistence(filepath=settings.graph_filepath)
+    persistence = persistence or _build_persistence(settings)
 
     graph_store = GraphStore(
         merge_engine=merge_engine,
@@ -139,3 +141,15 @@ def build_runtime(
         logger.info("Runtime ready without auto-loading persisted graph")
 
     return runtime
+
+
+def _build_persistence(settings: DriftGuardSettings) -> GraphPersistence:
+    if settings.storage_backend == "json":
+        return Persistence(filepath=settings.graph_filepath)
+
+    if settings.storage_backend == "sqlite":
+        return SQLitePersistence(filepath=settings.sqlite_filepath)
+
+    raise ValueError(
+        f"Unsupported storage backend: {settings.storage_backend!r}"
+    )

@@ -141,6 +141,8 @@ from driftguard import DriftGuardSettings, build_runtime
 
 settings = DriftGuardSettings(
     graph_filepath="driftguard_graph.json",
+    storage_backend="json",
+    sqlite_filepath="driftguard_graph.sqlite3",
     retrieval_top_k=5,
     retrieval_min_similarity=0.60,
     similarity_threshold_action=0.72,
@@ -151,6 +153,8 @@ runtime = build_runtime(settings=settings)
 
 Useful settings include:
 - `graph_filepath`
+- `storage_backend`
+- `sqlite_filepath`
 - `embedding_model_name`
 - `embedding_device`
 - `retrieval_top_k`
@@ -164,6 +168,8 @@ Useful settings include:
 - `prune_node_stale_days`
 - `prune_edge_min_frequency`
 - `log_level`
+
+Use `storage_backend="sqlite"` to keep the same graph model while persisting it to SQLite instead of JSON.
 
 ## End-to-End Examples
 
