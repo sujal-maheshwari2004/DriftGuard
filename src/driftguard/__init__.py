@@ -30,7 +30,12 @@ from driftguard.evaluation import (
     metric_summary,
 )
 from driftguard.logging_config import configure_logging
-from driftguard.guard import DriftGuard, GuardrailTriggered, guard_step
+from driftguard.guard import (
+    DriftGuard,
+    GuardrailAcknowledgementRequired,
+    GuardrailTriggered,
+    guard_step,
+)
 from driftguard.mcp import create_mcp_server
 from driftguard.runtime import DriftGuardRuntime, build_runtime
 from driftguard.storage.sqlite_persistence import SQLitePersistence

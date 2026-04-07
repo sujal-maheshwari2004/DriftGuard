@@ -1,17 +1,25 @@
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
-from driftguard.config import DriftGuardSettings
+from driftguard.config import DEFAULT_SETTINGS, DriftGuardSettings
 from driftguard.logging_config import get_logger
+from driftguard.models.response import RetrievalResponse
 from driftguard.runtime import DriftGuardRuntime, build_runtime
 
 
 logger = get_logger(__name__)
+GuardPolicy = Literal["warn", "block", "acknowledge", "record_only"]
 
 
 class GuardrailTriggered(RuntimeError):
     """
     Raised when DriftGuard detects a risky repeated action and blocking is enabled.
+    """
+
+
+class GuardrailAcknowledgementRequired(RuntimeError):
+    """
+    Raised when DriftGuard requires explicit acknowledgement before continuing.
     """
 
 
@@ -27,6 +35,7 @@ class DriftGuard:
         settings: DriftGuardSettings | None = None,
     ):
         self.runtime = runtime or build_runtime(settings=settings)
+        self.settings = settings or getattr(self.runtime, "settings", DEFAULT_SETTINGS)
 
     def review(self, context: str):
         return self.runtime.query_memory(context)
@@ -53,15 +62,35 @@ class DriftGuard:
         self,
         context: str,
         *,
-        min_confidence: float = 0.0,
+        min_confidence: float | None = None,
         raise_on_match: bool = False,
+        policy: GuardPolicy | None = None,
+        acknowledged: bool = False,
     ):
+        resolved_policy = self._resolve_policy(
+            policy=policy,
+            raise_on_match=raise_on_match,
+        )
+        min_confidence = self._resolve_min_confidence(min_confidence)
+
+        if resolved_policy == "record_only":
+            logger.info(
+                "Skipping pre-step review for context=%r due to record_only policy",
+                context,
+            )
+            return RetrievalResponse(
+                query=context,
+                warnings=[],
+                chains=[],
+                confidence=0.0,
+            )
+
         response = self.review(context)
 
         if self._should_block(
             response,
             min_confidence=min_confidence,
-            raise_on_match=raise_on_match,
+            policy=resolved_policy,
         ):
             logger.warning(
                 "Blocking agent step for context=%r with confidence=%.2f",
@@ -70,6 +99,21 @@ class DriftGuard:
             )
             raise GuardrailTriggered(self._format_block_message(context, response))
 
+        if self._should_acknowledge(
+            response,
+            min_confidence=min_confidence,
+            policy=resolved_policy,
+            acknowledged=acknowledged,
+        ):
+            logger.warning(
+                "Acknowledgement required for context=%r with confidence=%.2f",
+                context,
+                response.confidence,
+            )
+            raise GuardrailAcknowledgementRequired(
+                self._format_acknowledgement_message(context, response)
+            )
+
         return response
 
     def _should_block(
@@ -77,13 +121,44 @@ class DriftGuard:
         response,
         *,
         min_confidence: float,
-        raise_on_match: bool,
+        policy: GuardPolicy,
     ) -> bool:
         return (
-            raise_on_match
+            policy == "block"
             and bool(response.warnings)
             and response.confidence >= min_confidence
         )
+
+    def _should_acknowledge(
+        self,
+        response,
+        *,
+        min_confidence: float,
+        policy: GuardPolicy,
+        acknowledged: bool,
+    ) -> bool:
+        return (
+            policy == "acknowledge"
+            and not acknowledged
+            and bool(response.warnings)
+            and response.confidence >= min_confidence
+        )
+
+    def _resolve_policy(
+        self,
+        *,
+        policy: GuardPolicy | None,
+        raise_on_match: bool,
+    ) -> GuardPolicy:
+        if raise_on_match and policy in (None, "warn"):
+            return "block"
+
+        return policy or self.settings.guard_policy
+
+    def _resolve_min_confidence(self, min_confidence: float | None) -> float:
+        if min_confidence is None:
+            return self.settings.guard_min_confidence
+        return min_confidence
 
     def _format_block_message(self, context: str, response) -> str:
         top_warning = response.warnings[0] if response.warnings else None
@@ -97,13 +172,30 @@ class DriftGuard:
             f"confidence={top_warning.confidence:.2f}"
         )
 
+    def _format_acknowledgement_message(self, context: str, response) -> str:
+        top_warning = response.warnings[0] if response.warnings else None
+
+        if top_warning is None:
+            return (
+                f"DriftGuard requires acknowledgement before continuing "
+                f"for context={context!r}"
+            )
+
+        return (
+            f"DriftGuard requires acknowledgement for context={context!r}. "
+            f"Top warning: trigger={top_warning.trigger!r}, risk={top_warning.risk!r}, "
+            f"confidence={top_warning.confidence:.2f}"
+        )
+
 
 def guard_step(
     guard: DriftGuard,
     *,
     input_getter: Callable[..., str] | None = None,
-    min_confidence: float = 0.0,
+    min_confidence: float | None = None,
     raise_on_match: bool = False,
+    policy: GuardPolicy | None = None,
+    acknowledged_getter: Callable[..., bool] | None = None,
     on_review: Callable[[Any], None] | None = None,
 ):
     """
@@ -128,6 +220,12 @@ def guard_step(
                 context,
                 min_confidence=min_confidence,
                 raise_on_match=raise_on_match,
+                policy=policy,
+                acknowledged=(
+                    acknowledged_getter(*args, **kwargs)
+                    if acknowledged_getter is not None
+                    else False
+                ),
             )
 
             if on_review is not None:

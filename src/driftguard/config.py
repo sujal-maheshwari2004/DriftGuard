@@ -16,6 +16,8 @@ class DriftGuardSettings:
     similarity_threshold_action: float = 0.72
     similarity_threshold_feedback: float = 0.70
     similarity_threshold_outcome: float = 0.88
+    guard_policy: str = "warn"
+    guard_min_confidence: float = 0.0
     prune_node_stale_days: int = 60
     prune_edge_min_frequency: int = 2
     log_level: str = "INFO"

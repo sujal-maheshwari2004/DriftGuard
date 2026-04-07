@@ -2,7 +2,13 @@ from dataclasses import dataclass
 
 import pytest
 
-from driftguard.guard import DriftGuard, GuardrailTriggered, guard_step
+from driftguard.config import DriftGuardSettings
+from driftguard.guard import (
+    DriftGuard,
+    GuardrailAcknowledgementRequired,
+    GuardrailTriggered,
+    guard_step,
+)
 
 
 @dataclass
@@ -125,6 +131,65 @@ def test_before_step_does_not_block_below_threshold(warning_response):
     assert review is warning_response
 
 
+def test_before_step_requires_acknowledgement_when_policy_demands_it(
+    warning_response,
+):
+    runtime = FakeRuntime(response=warning_response)
+    guard = DriftGuard(runtime=runtime)
+
+    with pytest.raises(GuardrailAcknowledgementRequired) as exc:
+        guard.before_step(
+            "increase salt",
+            min_confidence=0.8,
+            policy="acknowledge",
+        )
+
+    assert "increase salt" in str(exc.value)
+    assert "too salty" in str(exc.value)
+
+
+def test_before_step_allows_acknowledged_warning_to_continue(warning_response):
+    runtime = FakeRuntime(response=warning_response)
+    guard = DriftGuard(runtime=runtime)
+
+    review = guard.before_step(
+        "increase salt",
+        min_confidence=0.8,
+        policy="acknowledge",
+        acknowledged=True,
+    )
+
+    assert review is warning_response
+
+
+def test_before_step_record_only_skips_runtime_review(warning_response):
+    runtime = FakeRuntime(response=warning_response)
+    guard = DriftGuard(runtime=runtime)
+
+    review = guard.before_step("increase salt", policy="record_only")
+
+    assert review.query == "increase salt"
+    assert review.warnings == []
+    assert review.confidence == 0.0
+    assert runtime.query_calls == []
+
+
+def test_before_step_uses_settings_defaults_for_policy_and_threshold(
+    warning_response,
+):
+    runtime = FakeRuntime(response=warning_response)
+    guard = DriftGuard(
+        runtime=runtime,
+        settings=DriftGuardSettings(
+            guard_policy="block",
+            guard_min_confidence=0.8,
+        ),
+    )
+
+    with pytest.raises(GuardrailTriggered):
+        guard.before_step("increase salt")
+
+
 def test_guard_step_uses_default_string_argument_context(warning_response):
     runtime = FakeRuntime(response=warning_response)
     guard = DriftGuard(runtime=runtime)
@@ -156,6 +221,27 @@ def test_guard_step_supports_custom_input_getter(warning_response):
 
     assert result == "increase salt"
     assert runtime.query_calls == ["increase salt"]
+
+
+def test_guard_step_supports_acknowledgement_getter(warning_response):
+    runtime = FakeRuntime(response=warning_response)
+    guard = DriftGuard(runtime=runtime)
+
+    @guard_step(
+        guard,
+        input_getter=lambda payload: payload["next_action"],
+        acknowledged_getter=lambda payload: payload["acknowledged"],
+        policy="acknowledge",
+    )
+    def agent_step(payload: dict):
+        return payload["next_action"]
+
+    with pytest.raises(GuardrailAcknowledgementRequired):
+        agent_step({"next_action": "increase salt", "acknowledged": False})
+
+    result = agent_step({"next_action": "increase salt", "acknowledged": True})
+
+    assert result == "increase salt"
 
 
 def test_guard_step_raises_when_context_cannot_be_derived(warning_response):

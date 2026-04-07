@@ -165,11 +165,14 @@ Useful settings include:
 - `similarity_threshold_action`
 - `similarity_threshold_feedback`
 - `similarity_threshold_outcome`
+- `guard_policy`
+- `guard_min_confidence`
 - `prune_node_stale_days`
 - `prune_edge_min_frequency`
 - `log_level`
 
 Use `storage_backend="sqlite"` to keep the same graph model while persisting it to SQLite instead of JSON.
+Use `guard_policy` to choose how the in-process guard behaves before a step: `warn`, `block`, `acknowledge`, or `record_only`.
 
 ## End-to-End Examples
 
