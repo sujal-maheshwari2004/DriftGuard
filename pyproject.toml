@@ -7,11 +7,13 @@ name = "driftguard"
 version = "0.1.0"
 description = "A semantic mistake-memory system for agents with MCP and in-process guardrail entrypoints."
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.13"
 keywords = ["agents", "mcp", "memory", "guardrails", "retrieval"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",

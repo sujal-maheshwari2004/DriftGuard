@@ -24,6 +24,8 @@ def test_pyproject_has_publishable_metadata():
         dependency.startswith("langgraph")
         for dependency in project["optional-dependencies"]["demo"]
     )
+    assert project["license"] == "MIT"
+    assert "License :: OSI Approved :: MIT License" in project["classifiers"]
     assert "Homepage" in project["urls"]
     assert "Repository" in project["urls"]
 
@@ -105,3 +107,16 @@ def test_demo_assets_exist_and_are_documented():
     assert "LangGraph" in langgraph_readme
     assert "OPENAI_API_KEY" in langgraph_readme
     assert ".[demo]" in langgraph_readme
+
+
+def test_license_and_contributing_files_exist():
+    """The repo should include a real open-source license and contribution guide."""
+
+    license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+
+    assert "MIT License" in license_text
+    assert "Permission is hereby granted" in license_text
+    assert "Contributing to DriftGuard" in contributing
+    assert "python -m pytest" in contributing
+    assert "README.md" in contributing
