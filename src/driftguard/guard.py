@@ -78,6 +78,11 @@ class DriftGuard:
                 "Skipping pre-step review for context=%r due to record_only policy",
                 context,
             )
+            self.runtime.metrics.record_review(
+                warnings_count=0,
+                confidence=0.0,
+                skipped=True,
+            )
             return RetrievalResponse(
                 query=context,
                 warnings=[],
@@ -97,6 +102,11 @@ class DriftGuard:
                 context,
                 response.confidence,
             )
+            self.runtime.metrics.record_review(
+                warnings_count=len(response.warnings),
+                confidence=response.confidence,
+                blocked=True,
+            )
             raise GuardrailTriggered(self._format_block_message(context, response))
 
         if self._should_acknowledge(
@@ -109,6 +119,11 @@ class DriftGuard:
                 "Acknowledgement required for context=%r with confidence=%.2f",
                 context,
                 response.confidence,
+            )
+            self.runtime.metrics.record_review(
+                warnings_count=len(response.warnings),
+                confidence=response.confidence,
+                acknowledgement_required=True,
             )
             raise GuardrailAcknowledgementRequired(
                 self._format_acknowledgement_message(context, response)

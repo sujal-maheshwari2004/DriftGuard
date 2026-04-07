@@ -73,15 +73,22 @@ class PruneEngine:
             "edges": graph.number_of_edges(),
         }
 
-        self._remove_weak_edges(graph)
-        self._remove_stale_nodes(graph)
-        self._remove_isolated_nodes(graph)
+        removed_weak_edges = self._remove_weak_edges(graph)
+        removed_stale_nodes = self._remove_stale_nodes(graph)
+        removed_isolated_nodes = self._remove_isolated_nodes(graph)
 
         after = {
             "nodes": graph.number_of_nodes(),
             "edges": graph.number_of_edges(),
         }
         logger.info("Deep prune completed before=%s after=%s", before, after)
+        return {
+            "before": before,
+            "after": after,
+            "removed_weak_edges": removed_weak_edges,
+            "removed_stale_nodes": removed_stale_nodes,
+            "removed_isolated_nodes": removed_isolated_nodes,
+        }
 
     # =====================================================
     # REMOVE WEAK EDGES
@@ -100,6 +107,8 @@ class PruneEngine:
 
         for edge in weak:
             graph.remove_edge(*edge)
+
+        return len(weak)
 
     # =====================================================
     # REMOVE STALE NODES
@@ -123,6 +132,8 @@ class PruneEngine:
         for node in stale:
             graph.remove_node(node)
 
+        return len(stale)
+
     # =====================================================
     # REMOVE ISOLATED NODES
     # =====================================================
@@ -140,3 +151,5 @@ class PruneEngine:
 
         for node in isolated:
             graph.remove_node(node)
+
+        return len(isolated)

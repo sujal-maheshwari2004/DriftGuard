@@ -5,6 +5,7 @@ from driftguard.graph.graph_store import GraphStore
 from driftguard.graph.merge_engine import MergeEngine
 from driftguard.graph.prune_engine import PruneEngine
 from driftguard.logging_config import get_logger
+from driftguard.metrics import DriftGuardMetrics
 from driftguard.models.event import Event
 from driftguard.retrieval.retrieval_engine import RetrievalEngine
 from driftguard.storage.base import GraphPersistence
@@ -23,6 +24,7 @@ class DriftGuardRuntime:
     persistence: GraphPersistence
     graph_store: GraphStore
     retrieval_engine: RetrievalEngine
+    metrics: DriftGuardMetrics
 
     def register_mistake(
         self,
@@ -45,6 +47,7 @@ class DriftGuardRuntime:
 
         self.graph_store.add_event(event)
         self.graph_store.save()
+        self.metrics.record_storage()
 
         response = {
             "status": "stored",
@@ -73,20 +76,30 @@ class DriftGuardRuntime:
     def deep_prune(self) -> dict:
         before = self.graph_store.stats()
         logger.info("Starting deep prune with stats=%s", before)
-        self.prune_engine.deep_prune(self.graph_store.graph)
+        prune_summary = self.prune_engine.deep_prune(self.graph_store.graph)
         self.graph_store.save()
         after = self.graph_store.stats()
+        self.metrics.record_prune(
+            nodes_removed=max(0, before["nodes"] - after["nodes"]),
+            edges_removed=max(0, before["edges"] - after["edges"]),
+        )
         logger.info("Deep prune finished with stats=%s", after)
         return {
             "status": "pruned",
             "before": before,
             "after": after,
+            "details": prune_summary,
         }
 
     def graph_stats(self) -> dict:
         stats = self.graph_store.stats()
         logger.debug("Graph stats requested: %s", stats)
         return stats
+
+    def metrics_snapshot(self) -> dict:
+        snapshot = self.metrics.snapshot_dict()
+        logger.debug("Metrics snapshot requested: %s", snapshot)
+        return snapshot
 
 
 def build_runtime(
@@ -95,6 +108,7 @@ def build_runtime(
     merge_engine: MergeEngine | None = None,
     prune_engine: PruneEngine | None = None,
     persistence: GraphPersistence | None = None,
+    metrics: DriftGuardMetrics | None = None,
     auto_load: bool = True,
 ) -> DriftGuardRuntime:
     logger.info("Building DriftGuard runtime")
@@ -102,6 +116,7 @@ def build_runtime(
     settings = settings or DEFAULT_SETTINGS
 
     merge_engine = merge_engine or MergeEngine(settings=settings)
+    metrics = metrics or DriftGuardMetrics()
     prune_engine = prune_engine or PruneEngine(
         node_stale_days=settings.prune_node_stale_days,
         edge_min_frequency=settings.prune_edge_min_frequency,
@@ -112,6 +127,7 @@ def build_runtime(
         merge_engine=merge_engine,
         prune_engine=prune_engine,
         persistence_engine=persistence,
+        metrics=metrics,
         traversal_max_depth=settings.traversal_max_depth,
         traversal_max_branching=settings.traversal_max_branching,
         traversal_max_paths=settings.traversal_max_paths,
@@ -120,6 +136,8 @@ def build_runtime(
         graph_store,
         top_k=settings.retrieval_top_k,
         min_similarity=settings.retrieval_min_similarity,
+        recency_weight=settings.retrieval_recency_weight,
+        metrics=metrics,
     )
 
     runtime = DriftGuardRuntime(
@@ -129,6 +147,7 @@ def build_runtime(
         persistence=persistence,
         graph_store=graph_store,
         retrieval_engine=retrieval_engine,
+        metrics=metrics,
     )
 
     if auto_load:

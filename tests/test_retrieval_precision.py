@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from dataclasses import dataclass
 
 import networkx as nx
@@ -83,6 +84,17 @@ class FakeNodeMatchStore:
         return {"frequency": 1}
 
 
+@dataclass
+class FakeRecencyStore(FakeNodeMatchStore):
+    last_seen: datetime | None = None
+
+    def get_node(self, node: str) -> dict:
+        return {
+            "frequency": 1,
+            "last_seen": self.last_seen,
+        }
+
+
 def test_retrieval_engine_filters_out_weak_matches():
     store = FakeNodeMatchStore(matches=[("increase salt", 0.58)])
     retriever = RetrievalEngine(
@@ -129,3 +141,29 @@ def test_retrieval_confidence_increases_with_similarity_score():
     assert high_result.confidence == high_result.warnings[0].confidence
     assert low_result.confidence == pytest.approx(0.6175)
     assert high_result.confidence == pytest.approx(0.7225)
+
+
+def test_retrieval_confidence_prefers_more_recent_trigger_when_scores_match():
+    recent_store = FakeRecencyStore(
+        matches=[("increase salt", 0.75)],
+        last_seen=datetime.now(UTC) - timedelta(hours=6),
+    )
+    stale_store = FakeRecencyStore(
+        matches=[("increase salt", 0.75)],
+        last_seen=datetime.now(UTC) - timedelta(days=45),
+    )
+
+    recent_result = RetrievalEngine(
+        recent_store,
+        min_similarity=0.60,
+        recency_weight=0.15,
+    ).query("increase salt")
+    stale_result = RetrievalEngine(
+        stale_store,
+        min_similarity=0.60,
+        recency_weight=0.15,
+    ).query("increase salt")
+
+    assert recent_result.warnings
+    assert stale_result.warnings
+    assert recent_result.confidence > stale_result.confidence

@@ -84,4 +84,12 @@ def create_mcp_server(
 
         return runtime.graph_stats()
 
+    @mcp.tool()
+    def guard_metrics():
+        """
+        Return DriftGuard runtime metrics and review counters.
+        """
+
+        return runtime.metrics_snapshot()
+
     return mcp

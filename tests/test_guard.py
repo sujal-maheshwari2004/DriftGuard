@@ -9,6 +9,7 @@ from driftguard.guard import (
     GuardrailTriggered,
     guard_step,
 )
+from driftguard.metrics import DriftGuardMetrics
 
 
 @dataclass
@@ -30,6 +31,7 @@ class FakeResponse:
 class FakeRuntime:
     def __init__(self, response: FakeResponse):
         self.response = response
+        self.metrics = DriftGuardMetrics()
         self.record_calls = []
         self.query_calls = []
         self.prune_calls = 0
@@ -116,6 +118,7 @@ def test_before_step_blocks_when_threshold_is_met(warning_response):
 
     assert "increase salt" in str(exc.value)
     assert "too salty" in str(exc.value)
+    assert runtime.metrics.snapshot_dict()["counters"]["reviews_blocked_total"] == 1
 
 
 def test_before_step_does_not_block_below_threshold(warning_response):
@@ -146,6 +149,9 @@ def test_before_step_requires_acknowledgement_when_policy_demands_it(
 
     assert "increase salt" in str(exc.value)
     assert "too salty" in str(exc.value)
+    assert (
+        runtime.metrics.snapshot_dict()["counters"]["reviews_ack_required_total"] == 1
+    )
 
 
 def test_before_step_allows_acknowledged_warning_to_continue(warning_response):
@@ -172,6 +178,7 @@ def test_before_step_record_only_skips_runtime_review(warning_response):
     assert review.warnings == []
     assert review.confidence == 0.0
     assert runtime.query_calls == []
+    assert runtime.metrics.snapshot_dict()["counters"]["reviews_skipped_total"] == 1
 
 
 def test_before_step_uses_settings_defaults_for_policy_and_threshold(

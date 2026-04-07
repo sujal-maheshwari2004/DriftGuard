@@ -26,6 +26,7 @@ class GraphStore:
         merge_engine,
         prune_engine,
         persistence_engine,
+        metrics=None,
         traversal_max_depth: int = 3,
         traversal_max_branching: int = 10,
         traversal_max_paths: int = 100,
@@ -34,6 +35,7 @@ class GraphStore:
         self.merge_engine = merge_engine
         self.prune_engine = prune_engine
         self.persistence_engine = persistence_engine
+        self.metrics = metrics
         self.traversal_max_depth = traversal_max_depth
         self.traversal_max_branching = traversal_max_branching
         self.traversal_max_paths = traversal_max_paths
@@ -210,6 +212,8 @@ class GraphStore:
             node = self.graph.nodes[existing]
             node["frequency"] += 1
             node["last_seen"] = datetime.now(UTC)
+            if self.metrics is not None:
+                self.metrics.record_node_merged()
             logger.debug(
                 "Merged %r into existing %s node=%r frequency=%d",
                 text,
@@ -238,6 +242,8 @@ class GraphStore:
             first_seen=now,
             last_seen=now,
         )
+        if self.metrics is not None:
+            self.metrics.record_node_created()
 
         logger.debug("Created new %s node=%r", node_type, text)
         return text
@@ -250,6 +256,8 @@ class GraphStore:
 
         if self.graph.has_edge(src, dst):
             self.graph[src][dst]["frequency"] += 1
+            if self.metrics is not None:
+                self.metrics.record_edge_reused()
             logger.debug(
                 "Incremented edge %r -> %r frequency=%d",
                 src,
@@ -265,4 +273,6 @@ class GraphStore:
                 weight=1.0,
                 created_at=datetime.now(UTC),
             )
+            if self.metrics is not None:
+                self.metrics.record_edge_created()
             logger.debug("Created edge %r -> %r", src, dst)

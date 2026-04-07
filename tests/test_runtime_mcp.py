@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import pytest
 
 from driftguard.config import DriftGuardSettings
+from driftguard.metrics import DriftGuardMetrics
 from driftguard.models.response import RetrievalResponse, Warning
 from driftguard import mcp as mcp_module
 from driftguard import runtime as runtime_module
@@ -14,6 +15,7 @@ class FakeGraphStore:
         merge_engine,
         prune_engine,
         persistence_engine,
+        metrics=None,
         traversal_max_depth: int = 3,
         traversal_max_branching: int = 10,
         traversal_max_paths: int = 100,
@@ -21,6 +23,7 @@ class FakeGraphStore:
         self.merge_engine = merge_engine
         self.prune_engine = prune_engine
         self.persistence_engine = persistence_engine
+        self.metrics = metrics
         self.traversal_max_depth = traversal_max_depth
         self.traversal_max_branching = traversal_max_branching
         self.traversal_max_paths = traversal_max_paths
@@ -55,6 +58,13 @@ class FakePruneEngine:
 
     def deep_prune(self, graph):
         self.deep_prune_calls.append(graph)
+        return {
+            "before": {"nodes": 4, "edges": 3},
+            "after": {"nodes": 4, "edges": 3},
+            "removed_weak_edges": 0,
+            "removed_stale_nodes": 0,
+            "removed_isolated_nodes": 0,
+        }
 
 
 class FakePersistence:
@@ -68,10 +78,19 @@ class FakeSQLitePersistence:
 
 
 class FakeRetrievalEngine:
-    def __init__(self, graph_store, top_k: int, min_similarity: float):
+    def __init__(
+        self,
+        graph_store,
+        top_k: int,
+        min_similarity: float,
+        recency_weight: float = 0.15,
+        metrics=None,
+    ):
         self.graph_store = graph_store
         self.top_k = top_k
         self.min_similarity = min_similarity
+        self.recency_weight = recency_weight
+        self.metrics = metrics
         self.queries = []
 
     def query(self, context: str):
@@ -114,6 +133,7 @@ def test_build_runtime_threads_settings_into_components(monkeypatch):
     assert runtime.graph_store.traversal_max_paths == 25
     assert runtime.retrieval_engine.top_k == 7
     assert runtime.retrieval_engine.min_similarity == 0.77
+    assert runtime.retrieval_engine.recency_weight == settings.retrieval_recency_weight
     assert runtime.graph_store.load_calls == 1
 
 
@@ -154,6 +174,7 @@ def test_build_runtime_selects_sqlite_persistence_from_settings(monkeypatch):
 
 
 def test_runtime_register_query_prune_and_stats_delegate_to_components():
+    metrics = DriftGuardMetrics()
     runtime = runtime_module.DriftGuardRuntime(
         settings=DriftGuardSettings(),
         merge_engine=object(),
@@ -165,6 +186,7 @@ def test_runtime_register_query_prune_and_stats_delegate_to_components():
             top_k=5,
             min_similarity=0.6,
         ),
+        metrics=metrics,
     )
     runtime.retrieval_engine.graph_store = runtime.graph_store
 
@@ -178,8 +200,21 @@ def test_runtime_register_query_prune_and_stats_delegate_to_components():
     assert runtime.graph_store.added_events[0].action == "increase salt"
     assert query.query == "increase salt"
     assert runtime.prune_engine.deep_prune_calls == [runtime.graph_store.graph]
-    assert prune == {"status": "pruned", "before": {"nodes": 4, "edges": 3}, "after": {"nodes": 4, "edges": 3}}
+    assert prune == {
+        "status": "pruned",
+        "before": {"nodes": 4, "edges": 3},
+        "after": {"nodes": 4, "edges": 3},
+        "details": {
+            "before": {"nodes": 4, "edges": 3},
+            "after": {"nodes": 4, "edges": 3},
+            "removed_weak_edges": 0,
+            "removed_stale_nodes": 0,
+            "removed_isolated_nodes": 0,
+        },
+    }
     assert stats == {"nodes": 4, "edges": 3}
+    assert runtime.metrics_snapshot()["counters"]["records_total"] == 1
+    assert runtime.metrics_snapshot()["counters"]["prune_runs_total"] == 1
 
 
 @dataclass
@@ -205,6 +240,13 @@ class FakeRuntime:
         self.calls.append(("graph_stats",))
         return {"nodes": 2, "edges": 1}
 
+    def metrics_snapshot(self):
+        self.calls.append(("metrics_snapshot",))
+        return {
+            "counters": {"reviews_total": 3},
+            "gauges": {"last_review_confidence": 0.8},
+        }
+
 
 @pytest.mark.anyio
 async def test_create_mcp_server_registers_tools_and_calls_runtime():
@@ -225,6 +267,7 @@ async def test_create_mcp_server_registers_tools_and_calls_runtime():
     assert tool_names == [
         "deep_prune",
         "graph_stats",
+        "guard_metrics",
         "query_memory",
         "register_mistake",
     ]
@@ -236,6 +279,7 @@ async def test_create_mcp_server_registers_tools_and_calls_runtime():
     query_result = await server.call_tool("query_memory", {"context": "increase salt"})
     prune_result = await server.call_tool("deep_prune", {})
     stats_result = await server.call_tool("graph_stats", {})
+    metrics_result = await server.call_tool("guard_metrics", {})
 
     assert register_result.structured_content == {
         "status": "stored",
@@ -247,11 +291,16 @@ async def test_create_mcp_server_registers_tools_and_calls_runtime():
     assert query_result.structured_content["warnings"][0]["risk"] == "too salty"
     assert prune_result.structured_content == {"status": "pruned"}
     assert stats_result.structured_content == {"nodes": 2, "edges": 1}
+    assert metrics_result.structured_content == {
+        "counters": {"reviews_total": 3},
+        "gauges": {"last_review_confidence": 0.8},
+    }
     assert runtime.calls == [
         ("register_mistake", "increase salt", "too salty", "dish ruined"),
         ("query_memory", "increase salt"),
         ("deep_prune",),
         ("graph_stats",),
+        ("metrics_snapshot",),
     ]
 
 

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from driftguard.logging_config import get_logger
 from driftguard.models.response import Warning, RetrievalResponse
 
@@ -21,11 +23,15 @@ class RetrievalEngine:
         *,
         top_k: int = 5,
         min_similarity: float = 0.0,
+        recency_weight: float = 0.15,
+        metrics=None,
     ):
 
         self.graph_store = graph_store
         self.top_k = top_k
         self.min_similarity = min_similarity
+        self.recency_weight = recency_weight
+        self.metrics = metrics
         logger.info("Retrieval engine initialized")
 
     # =====================================================
@@ -59,6 +65,11 @@ class RetrievalEngine:
             len(warnings),
             confidence,
         )
+        if self.metrics is not None:
+            self.metrics.record_review(
+                warnings_count=len(warnings),
+                confidence=confidence,
+            )
 
         return RetrievalResponse(
             query=context,
@@ -96,6 +107,7 @@ class RetrievalEngine:
 
             node_data = self.graph_store.get_node(trigger)
             node_freq = node_data.get("frequency", 1)
+            recency_score = self._recency_score(node_data.get("last_seen"))
 
             # Factor edge frequency into confidence when available
             edge_freq = self._get_edge_frequency(trigger, risk)
@@ -103,6 +115,7 @@ class RetrievalEngine:
                 node_freq,
                 edge_freq,
                 similarity_score,
+                recency_score=recency_score,
             )
 
             if key not in seen or confidence > seen[key].confidence:
@@ -144,6 +157,8 @@ class RetrievalEngine:
         node_freq: int,
         edge_freq: int,
         similarity_score: float,
+        *,
+        recency_score: float | None = None,
     ) -> float:
         """
         Confidence based on combined node + edge reinforcement.
@@ -163,7 +178,33 @@ class RetrievalEngine:
         else:
             reinforcement_confidence = 0.60
 
+        baseline = 0.65 * reinforcement_confidence + 0.35 * similarity_score
+
+        if recency_score is None:
+            return min(1.0, baseline)
+
+        recency_weight = max(0.0, min(self.recency_weight, 0.5))
+        remaining_weight = 1.0 - recency_weight
+        reinforcement_weight = remaining_weight * 0.65
+        similarity_weight = remaining_weight * 0.35
+
         return min(
             1.0,
-            0.65 * reinforcement_confidence + 0.35 * similarity_score,
+            reinforcement_weight * reinforcement_confidence
+            + similarity_weight * similarity_score
+            + recency_weight * recency_score,
         )
+
+    def _recency_score(self, last_seen) -> float | None:
+        if not isinstance(last_seen, datetime):
+            return None
+
+        age = datetime.now(UTC) - last_seen
+
+        if age.days <= 1:
+            return 1.0
+        if age.days <= 7:
+            return 0.85
+        if age.days <= 30:
+            return 0.70
+        return 0.50
