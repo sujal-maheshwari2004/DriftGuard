@@ -2,66 +2,100 @@
 requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
+
 [project]
 name = "driftguard"
 version = "0.1.0"
-description = "A semantic mistake-memory system for agents with MCP and in-process guardrail entrypoints."
-readme = "README.md"
-license = "MIT"
-requires-python = ">=3.13"
-keywords = ["agents", "mcp", "memory", "guardrails", "retrieval"]
+description = "A semantic mistake-memory system for AI agents with MCP and in-process guardrail entrypoints."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.9"
+
+authors = [
+  { name = "Sujal Maheshwari", email = "sujalmaheshwari07@gmail.com" }
+]
+
+license = { file = "LICENSE" }
+
+keywords = [
+  "agents",
+  "mcp",
+  "memory",
+  "guardrails",
+  "retrieval",
+  "langgraph",
+  "agent-safety",
+  "ai-infrastructure"
+]
+
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Software Development :: Libraries :: Python Modules",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries :: Python Modules"
 ]
+
 dependencies = [
-    "fastmcp>=3.2.0",
-    "networkx>=3.6.1",
-    "numpy>=2.4.4",
-    "orjson>=3.11.8",
-    "pydantic>=2.12.5",
-    "python-dateutil>=2.9.0.post0",
-    "rich>=14.3.3",
-    "sentence-transformers>=5.3.0",
-    "spacy>=3.8.14",
-    "sqlite-utils>=3.39",
-    "tenacity>=9.1.4",
+  "fastmcp>=3.2.0",
+  "networkx>=3.0",
+  "numpy>=1.24",
+  "orjson>=3.9",
+  "pydantic>=2.0",
+  "python-dateutil>=2.8",
+  "rich>=13.0",
+  "sentence-transformers>=2.6",
+  "spacy>=3.7",
+  "sqlite-utils>=3.35",
+  "tenacity>=8.0"
 ]
+
+
+[project.optional-dependencies]
+
+test = [
+  "pytest>=7.0"
+]
+
+demo = [
+  "langchain-openai>=0.3.0",
+  "langgraph>=0.2.60"
+]
+
+dev = [
+  "build>=1.2.2",
+  "pytest>=7.0",
+  "langchain-openai>=0.3.0",
+  "langgraph>=0.2.60"
+]
+
 
 [project.urls]
 Homepage = "https://github.com/sujal-maheshwari2004/DriftGuard"
 Repository = "https://github.com/sujal-maheshwari2004/DriftGuard"
 Issues = "https://github.com/sujal-maheshwari2004/DriftGuard/issues"
 
-[project.optional-dependencies]
-test = [
-    "pytest>=9.0.2",
-]
-demo = [
-    "langchain-openai>=0.3.0",
-    "langgraph>=0.2.60",
-]
-dev = [
-    "build>=1.2.2.post1",
-    "langchain-openai>=0.3.0",
-    "langgraph>=0.2.60",
-    "pytest>=9.0.2",
-]
 
 [project.scripts]
 driftguard-mcp = "driftguard.server:main"
 driftguard-benchmark = "driftguard.benchmark:main"
 
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
 
 [tool.pytest.ini_options]
 addopts = "-vv -ra"

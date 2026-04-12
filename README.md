@@ -1,95 +1,177 @@
 # DriftGuard
 
-DriftGuard is a semantic mistake-memory and guardrail layer for AI agents.
+**DriftGuard** is a semantic mistake-memory and guardrail layer for autonomous agents.
 
-It sits between agent intent and agent execution:
-- review the next planned step
-- surface warnings from similar past failures
-- optionally block or require acknowledgement
-- record new mistakes after the step completes
+It sits between **intent** and **execution**, allowing agents to learn from past failures and avoid repeating them.
 
-DriftGuard is framework-agnostic at the integration level. Today it supports two primary entrypoints:
-- `driftguard-mcp` for MCP-capable agents
-- `DriftGuard` / `guard_step(...)` for in-process Python agents
+DriftGuard stores structured causal memories:
 
-## Why Use It
-
-DriftGuard is useful when an agent can already act, but you want it to stop repeating the same mistakes.
-
-It stores causal memories in this shape:
-
-```text
-action -> feedback -> outcome
+```
+action → feedback → outcome
 ```
 
-Example:
-- action: `increase salt`
-- feedback: `too salty`
-- outcome: `dish ruined`
+and surfaces warnings when similar risky actions appear again.
 
-Because DriftGuard uses semantic matching instead of exact string matching, `"add more salt"` can still retrieve warnings learned from `"increase salt"`.
+It works with:
 
-## What DriftGuard Can Do
+* MCP agents
+* LangGraph workflows
+* custom Python agents
+* tool-calling planners
+* autonomous pipelines
 
-- semantically merge similar mistake memories
-- retrieve warnings before an agent step executes
-- support `warn`, `block`, `acknowledge`, and `record_only` guard policies
-- persist memory to JSON or SQLite while keeping the same graph-based runtime model
-- prune weak, stale, and isolated graph structure
-- expose runtime metrics and graph stats
-- benchmark merge and retrieval quality with a built-in offline suite
-- integrate through MCP, plain Python, or helper adapters for generic payloads and LangGraph-style state
+---
+
+## Why DriftGuard Exists
+
+Agents today can act.
+
+They usually cannot **remember mistakes meaningfully**.
+
+Typical failure loop:
+
+```
+agent makes mistake
+agent retries
+agent repeats mistake
+agent retries again
+```
+
+DriftGuard introduces a semantic failure memory layer:
+
+```
+plan step
+↓
+DriftGuard review
+↓
+warning surfaced
+↓
+agent revises action
+```
+
+This improves:
+
+* stability
+* reliability
+* convergence speed
+* evaluation consistency
+* production safety
+
+without requiring changes to your planner architecture.
+
+---
+
+## What DriftGuard Does
+
+DriftGuard provides:
+
+• semantic mistake memory
+• similarity-aware warning retrieval
+• policy-based execution guardrails
+• merge + deduplicate memory graphs
+• JSON or SQLite persistence
+• runtime metrics
+• pruning of stale weak memories
+• MCP server integration
+• LangGraph adapters
+• offline benchmark harness
+
+---
 
 ## Installation
 
-Install the package:
+Install from PyPI:
 
 ```bash
-pip install .
+pip install driftguard
 ```
 
 Install test dependencies:
 
 ```bash
-pip install ".[test]"
+pip install "driftguard[test]"
 ```
 
-Install demo dependencies for the LangGraph walkthrough:
+Install LangGraph demo dependencies:
 
 ```bash
-pip install ".[demo]"
+pip install "driftguard[demo]"
 ```
 
-Install the spaCy model used for normalization:
+Install the spaCy normalization model:
 
 ```bash
 python -m spacy download en_core_web_sm
 ```
 
-If DriftGuard cannot load the embedding backend or spaCy model, it raises DriftGuard-specific dependency errors with setup guidance.
+---
 
-## Quick Start
+## Quick Example (Python Agent)
 
-### Option 1: MCP Server
+```python
+from driftguard import DriftGuard
 
-Run the packaged MCP entrypoint:
+guard = DriftGuard()
+
+review = guard.before_step("increase salt")
+
+if review.warnings:
+    print(review.warnings[0].risk)
+
+guard.record(
+    action="increase salt",
+    feedback="too salty",
+    outcome="dish ruined",
+)
+```
+
+DriftGuard now remembers this failure and warns on similar steps later.
+
+---
+
+## Guard Policies
+
+Control how the agent reacts to detected risks:
+
+```python
+from driftguard import DriftGuard, DriftGuardSettings
+
+guard = DriftGuard(
+    settings=DriftGuardSettings(
+        guard_policy="acknowledge",
+        guard_min_confidence=0.8,
+    )
+)
+```
+
+Supported modes:
+
+| policy      | behavior                     |
+| ----------- | ---------------------------- |
+| warn        | surface warning only         |
+| block       | raise exception              |
+| acknowledge | require confirmation         |
+| record_only | store memory but skip review |
+
+---
+
+## MCP Server Usage
+
+Run DriftGuard as an MCP server:
 
 ```bash
 driftguard-mcp
 ```
 
-Or locally from the repo:
+Available tools:
 
-```bash
-python server.py
 ```
-
-Available MCP tools:
-- `register_mistake`
-- `query_memory`
-- `deep_prune`
-- `graph_stats`
-- `guard_metrics`
+register_mistake
+query_memory
+deep_prune
+graph_stats
+guard_metrics
+```
 
 Example Claude Desktop config:
 
@@ -103,275 +185,265 @@ Example Claude Desktop config:
 }
 ```
 
-### Option 2: In-Process Guard API
+---
 
-Use DriftGuard directly inside a Python agent loop:
+## LangGraph Integration
+
+Create a review node inside a LangGraph workflow:
 
 ```python
 from driftguard import DriftGuard
+from driftguard import make_langgraph_review_node
 
 guard = DriftGuard()
 
-review = guard.before_step("increase salt")
-if review.warnings:
-    print(review.warnings[0].risk)
-
-guard.record(
-    action="increase salt",
-    feedback="too salty",
-    outcome="dish ruined",
-)
+review_node = make_langgraph_review_node(guard)
 ```
 
-Decorator form:
+Drop this node directly into a planner graph.
 
-```python
-from driftguard import DriftGuard, guard_step
+---
 
-guard = DriftGuard()
+## Generic Payload Adapter
 
-@guard_step(guard, input_getter=lambda payload: payload["next_action"])
-def agent_step(payload: dict):
-    return payload["next_action"]
-```
-
-## Guard Policies
-
-The in-process guard supports four policy modes:
-- `warn`: review and continue
-- `block`: raise if confidence crosses the threshold
-- `acknowledge`: require explicit acknowledgement before continuing
-- `record_only`: skip pre-step review and only use DriftGuard for recording
-
-Example:
-
-```python
-from driftguard import DriftGuard, DriftGuardSettings
-
-guard = DriftGuard(
-    settings=DriftGuardSettings(
-        guard_policy="acknowledge",
-        guard_min_confidence=0.8,
-    )
-)
-```
-
-## Adapters
-
-If you do not want to wire everything manually, DriftGuard includes small adapter helpers.
-
-Generic payload review:
+Review arbitrary planner payloads:
 
 ```python
 from driftguard import DriftGuard, review_payload
 
 guard = DriftGuard()
+
 result = review_payload(
     guard,
     {"action": "increase salt", "attempt": 2},
 )
 ```
 
-LangGraph-style state review node:
+---
 
-```python
-from driftguard import DriftGuard, make_langgraph_review_node
+## CLI Benchmark Tool
 
-guard = DriftGuard()
-review_node = make_langgraph_review_node(guard)
-
-state_update = review_node({"candidate_action": "increase salt"})
-```
-
-## Configuration
-
-DriftGuard uses a shared settings object:
-
-```python
-from driftguard import DriftGuardSettings, build_runtime
-
-settings = DriftGuardSettings(
-    graph_filepath="driftguard_graph.json",
-    storage_backend="sqlite",
-    sqlite_filepath="driftguard_graph.sqlite3",
-    retrieval_top_k=5,
-    retrieval_min_similarity=0.60,
-    retrieval_recency_weight=0.15,
-    similarity_threshold_action=0.72,
-    guard_policy="warn",
-)
-
-runtime = build_runtime(settings=settings)
-```
-
-Useful settings include:
-- `graph_filepath`
-- `storage_backend`
-- `sqlite_filepath`
-- `embedding_model_name`
-- `embedding_device`
-- `retrieval_top_k`
-- `retrieval_min_similarity`
-- `retrieval_recency_weight`
-- `traversal_max_depth`
-- `traversal_max_branching`
-- `traversal_max_paths`
-- `similarity_threshold_action`
-- `similarity_threshold_feedback`
-- `similarity_threshold_outcome`
-- `guard_policy`
-- `guard_min_confidence`
-- `prune_node_stale_days`
-- `prune_edge_min_frequency`
-- `log_level`
-
-Use `storage_backend="sqlite"` to keep the same graph model while persisting it to SQLite instead of JSON.
-
-## Storage Model
-
-DriftGuard uses a graph in memory and a persistence backend underneath it.
-
-- in-memory model: graph-based runtime using `networkx`
-- persistence backends: versioned JSON or SQLite
-
-This means you keep graph behavior while choosing a storage backend that fits local or more serious usage.
-
-## Metrics and Observability
-
-DriftGuard now tracks lightweight runtime metrics such as:
-- review counts
-- warnings surfaced
-- blocked steps
-- acknowledgement-required steps
-- skipped reviews
-- stored records
-- node and edge creation or reuse
-- prune activity
-
-In Python:
-
-```python
-from driftguard import build_runtime
-
-runtime = build_runtime()
-snapshot = runtime.metrics_snapshot()
-print(snapshot["counters"])
-```
-
-Over MCP:
-- call `guard_metrics`
-
-## Evaluation and Benchmarking
-
-DriftGuard includes a lightweight evaluation harness plus a built-in offline benchmark suite.
-
-You can benchmark:
-- merge precision / recall / F1
-- retrieval precision / recall / F1
-
-Run the built-in benchmark:
+Evaluate merge and retrieval quality:
 
 ```bash
 driftguard-benchmark
 ```
 
-Emit structured JSON:
+Export structured results:
 
 ```bash
 driftguard-benchmark --format json
 ```
 
-You can also define your own merge and retrieval benchmark cases through the Python evaluation API.
+Measures:
+
+* merge precision
+* merge recall
+* retrieval precision
+* retrieval recall
+* F1 score
+
+---
+
+## Storage Model
+
+DriftGuard uses:
+
+```
+in-memory semantic graph runtime
++
+persistent storage backend
+```
+
+Supported persistence:
+
+| backend | purpose              |
+| ------- | -------------------- |
+| JSON    | local experiments    |
+| SQLite  | production workflows |
+
+Example configuration:
+
+```python
+from driftguard import DriftGuardSettings
+
+settings = DriftGuardSettings(
+    storage_backend="sqlite",
+    sqlite_filepath="driftguard.sqlite3",
+)
+```
+
+---
+
+## Metrics and Observability
+
+Runtime metrics available:
+
+```python
+from driftguard import build_runtime
+
+runtime = build_runtime()
+
+snapshot = runtime.metrics_snapshot()
+
+print(snapshot["counters"])
+```
+
+Includes:
+
+```
+reviews
+warnings
+blocks
+acknowledgements
+records
+node reuse
+edge reuse
+prune activity
+```
+
+Also available via MCP:
+
+```
+guard_metrics
+```
+
+---
+
+## Example Architecture Placement
+
+Typical agent loop:
+
+```
+planner
+ ↓
+candidate action
+ ↓
+DriftGuard review
+ ↓
+warning surfaced
+ ↓
+planner revision
+ ↓
+execution
+ ↓
+feedback recorded
+```
+
+DriftGuard improves stability without replacing the planner.
+
+---
 
 ## Local Demos
 
-There are two demo tracks under [demo/README.md](demo/README.md):
-- `demo/rule_based/`: deterministic simulator for graph growth, merge behavior, and pruning
-- `demo/langgraph/`: LangGraph-based LLM agent that DriftGuard reviews before each step
+Two included demos:
 
-Rule-based walkthrough:
+### Rule-based simulator
 
-```powershell
-.\.venv\Scripts\python.exe .\demo\rule_based\demo_agent.py --duration-seconds 600 --step-delay 5 --prune-every 6 --reset-graph --log-level WARNING
-```
-
-LangGraph LLM walkthrough:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[demo]"
-.\.venv\Scripts\python.exe .\demo\langgraph\demo_agent.py --duration-seconds 120 --step-delay 4 --prune-every 4 --reset-graph
-```
-
-The rule-based demo defaults to an offline-friendly built-in runtime so you can exercise DriftGuard locally even without the Hugging Face model cached. The LangGraph demo uses an OpenAI-compatible chat model and reads `OPENAI_API_KEY` plus optional `OPENAI_MODEL` / `OPENAI_BASE_URL`.
-
-## Architecture
-
-Current package layout:
-
-```text
-src/driftguard/
-  adapters/
-  benchmark.py
-  config.py
-  errors.py
-  evaluation.py
-  guard.py
-  logging_config.py
-  mcp.py
-  metrics.py
-  runtime.py
-  server.py
-  embedding/
-  graph/
-  models/
-  retrieval/
-  storage/
-  utils/
-```
-
-Key pieces:
-- `runtime.py`: shared construction and operational core
-- `mcp.py`: MCP server factory
-- `guard.py`: in-process guard and decorator entrypoint
-- `metrics.py`: counters and gauges for runtime behavior
-- `evaluation.py`: merge/retrieval evaluation primitives
-- `benchmark.py`: built-in benchmark suite and CLI
-- `storage/persistence.py`: versioned JSON persistence
-- `storage/sqlite_persistence.py`: SQLite persistence backend
-- `graph/merge_engine.py`: semantic matching and deduplication
-- `retrieval/retrieval_engine.py`: warning generation and confidence scoring
-
-## Development
-
-Run tests:
+Offline deterministic walkthrough:
 
 ```bash
-python -m pytest
+python demo/rule_based/demo_agent.py
 ```
 
-Collect tests only:
+Shows:
+
+* merge behavior
+* warning retrieval
+* pruning cleanup
+* graph evolution
+
+---
+
+### LangGraph LLM agent demo
 
 ```bash
-python -m pytest --collect-only
+pip install "driftguard[demo]"
+python demo/langgraph/demo_agent.py
 ```
 
-## Current Status
+Demonstrates:
 
-DriftGuard is an early but already usable release candidate for a focused agent-memory niche. The project currently includes:
-- real `src` package layout
-- dual entrypoints
-- shared runtime architecture
-- JSON and SQLite persistence
-- centralized logging
-- policy-driven in-process guardrails
-- metrics and graph stats
-- evaluation and benchmark tooling
-- demos for rule-based and LangGraph usage
-- targeted pytest coverage across core behaviors
+planner → guard → revise → execute loop
 
-## CI
+with real model interaction.
 
-The repository includes a GitHub Actions workflow that:
-- installs the package with test dependencies
-- collects the test suite
-- runs the full pytest suite
+---
+
+## CLI Entry Points
+
+Installed automatically:
+
+```
+driftguard-mcp
+driftguard-benchmark
+```
+
+---
+
+## Configuration Surface
+
+Example advanced setup:
+
+```python
+from driftguard import DriftGuardSettings
+
+settings = DriftGuardSettings(
+    retrieval_top_k=5,
+    retrieval_min_similarity=0.60,
+    similarity_threshold_action=0.72,
+    guard_policy="warn",
+)
+```
+
+Full configuration supports:
+
+```
+retrieval tuning
+similarity thresholds
+guard policy modes
+storage backend selection
+embedding configuration
+graph pruning controls
+logging verbosity
+```
+
+---
+
+## When To Use DriftGuard
+
+DriftGuard helps when your agent:
+
+* retries failing steps repeatedly
+* forgets past execution errors
+* needs execution-time guardrails
+* requires semantic mistake recall
+* runs multi-step planners
+* uses LangGraph or MCP
+* executes tools autonomously
+
+---
+
+## Project Status
+
+Current release includes:
+
+* semantic merge engine
+* similarity retrieval engine
+* graph persistence layer
+* SQLite backend
+* MCP server
+* LangGraph adapter
+* benchmark harness
+* runtime metrics
+* pruning engine
+* deterministic demo runtime
+* pytest coverage
+
+DriftGuard is suitable for early production experimentation and agent-infrastructure research workflows.
+
+---
+
+## License
+
+MIT License
