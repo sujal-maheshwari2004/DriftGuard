@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "driftguard"
+name = "driftguard-ai"
 version = "0.1.0"
 description = "A semantic mistake-memory system for AI agents with MCP and in-process guardrail entrypoints."
 readme = { file = "README.md", content-type = "text/markdown" }
@@ -14,7 +14,7 @@ authors = [
   { name = "Sujal Maheshwari", email = "sujalmaheshwari07@gmail.com" }
 ]
 
-license = { file = "LICENSE" }
+license = "MIT"
 
 keywords = [
   "agents",
@@ -31,7 +31,6 @@ classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 
   "Programming Language :: Python :: 3",
@@ -100,3 +99,4 @@ where = ["src"]
 [tool.pytest.ini_options]
 addopts = "-vv -ra"
 testpaths = ["tests"]
+
