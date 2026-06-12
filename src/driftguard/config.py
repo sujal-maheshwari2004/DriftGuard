@@ -6,6 +6,7 @@ class DriftGuardSettings:
     graph_filepath: str = "driftguard_graph.json"
     storage_backend: str = "json"
     sqlite_filepath: str = "driftguard_graph.sqlite3"
+    postgres_dsn: str | None = None
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_device: str | None = None
     retrieval_top_k: int = 5

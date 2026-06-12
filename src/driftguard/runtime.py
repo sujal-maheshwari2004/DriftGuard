@@ -10,6 +10,7 @@ from driftguard.models.event import Event
 from driftguard.retrieval.retrieval_engine import RetrievalEngine
 from driftguard.storage.base import GraphPersistence
 from driftguard.storage.persistence import Persistence
+from driftguard.storage.postgres_persistence import PostgresPersistence
 from driftguard.storage.sqlite_persistence import SQLitePersistence
 
 
@@ -168,6 +169,9 @@ def _build_persistence(settings: DriftGuardSettings) -> GraphPersistence:
 
     if settings.storage_backend == "sqlite":
         return SQLitePersistence(filepath=settings.sqlite_filepath)
+
+    if settings.storage_backend == "postgres":
+        return PostgresPersistence(dsn=settings.postgres_dsn)
 
     raise ValueError(
         f"Unsupported storage backend: {settings.storage_backend!r}"

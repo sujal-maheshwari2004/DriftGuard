@@ -69,7 +69,7 @@ DriftGuard provides:
 • similarity-aware warning retrieval
 • policy-based execution guardrails
 • merge + deduplicate memory graphs
-• JSON or SQLite persistence
+• JSON, SQLite, or Postgres persistence
 • runtime metrics
 • pruning of stale weak memories
 • MCP server integration
@@ -257,10 +257,11 @@ persistent storage backend
 
 Supported persistence:
 
-| backend | purpose              |
-| ------- | -------------------- |
-| JSON    | local experiments    |
-| SQLite  | production workflows |
+| backend  | purpose                            |
+| -------- | ---------------------------------- |
+| JSON     | local experiments                  |
+| SQLite   | production workflows               |
+| Postgres | shared / multi-process deployments |
 
 Example configuration:
 
@@ -272,6 +273,23 @@ settings = DriftGuardSettings(
     sqlite_filepath="driftguard.sqlite3",
 )
 ```
+
+The Postgres backend requires the optional `postgres` extra:
+
+```bash
+pip install "driftguard[postgres]"
+```
+
+```python
+from driftguard import DriftGuardSettings
+
+settings = DriftGuardSettings(
+    storage_backend="postgres",
+    postgres_dsn="postgresql+psycopg://user:pass@host:5432/driftguard",
+)
+```
+
+Embeddings are stored as JSONB on Postgres and plain JSON elsewhere; the schema (`driftguard_meta`, `driftguard_nodes`, `driftguard_edges`) is created automatically on first save.
 
 ---
 
@@ -431,7 +449,7 @@ Current release includes:
 * semantic merge engine
 * similarity retrieval engine
 * graph persistence layer
-* SQLite backend
+* SQLite and Postgres backends
 * MCP server
 * LangGraph adapter
 * benchmark harness

@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "driftguard-ai"
+name = "driftguard"
 version = "0.1.0"
 description = "A semantic mistake-memory system for AI agents with MCP and in-process guardrail entrypoints."
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 
 authors = [
   { name = "Sujal Maheshwari", email = "sujalmaheshwari07@gmail.com" }
@@ -34,10 +34,9 @@ classifiers = [
   "Operating System :: OS Independent",
 
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development :: Libraries :: Python Modules"
@@ -69,11 +68,18 @@ demo = [
   "langgraph>=0.2.60"
 ]
 
+postgres = [
+  "SQLAlchemy>=2.0",
+  "psycopg[binary]>=3.1"
+]
+
 dev = [
   "build>=1.2.2",
   "pytest>=7.0",
   "langchain-openai>=0.3.0",
-  "langgraph>=0.2.60"
+  "langgraph>=0.2.60",
+  "SQLAlchemy>=2.0",
+  "psycopg[binary]>=3.1"
 ]
 
 
@@ -99,4 +105,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 addopts = "-vv -ra"
 testpaths = ["tests"]
-
