@@ -44,9 +44,11 @@ class PostgresPersistence:
         dsn: str | None = None,
         *,
         engine: Any | None = None,
+        table_prefix: str = "",
     ):
         sa, postgresql_dialect = _load_sqlalchemy()
         self._sa = sa
+        self._table_prefix = table_prefix
 
         if engine is not None:
             self._engine = engine
@@ -63,13 +65,13 @@ class PostgresPersistence:
 
         self._metadata = sa.MetaData()
         self._meta_table = sa.Table(
-            "driftguard_meta",
+            f"{table_prefix}driftguard_meta",
             self._metadata,
             sa.Column("key", sa.Text, primary_key=True),
             sa.Column("value", sa.Text, nullable=False),
         )
         self._nodes_table = sa.Table(
-            "driftguard_nodes",
+            f"{table_prefix}driftguard_nodes",
             self._metadata,
             sa.Column("text", sa.Text, primary_key=True),
             sa.Column("type", sa.Text, nullable=False),
@@ -79,18 +81,18 @@ class PostgresPersistence:
             sa.Column("last_seen", sa.Text, nullable=True),
         )
         self._edges_table = sa.Table(
-            "driftguard_edges",
+            f"{table_prefix}driftguard_edges",
             self._metadata,
             sa.Column(
                 "src",
                 sa.Text,
-                sa.ForeignKey("driftguard_nodes.text", ondelete="CASCADE"),
+                sa.ForeignKey(f"{table_prefix}driftguard_nodes.text", ondelete="CASCADE"),
                 primary_key=True,
             ),
             sa.Column(
                 "dst",
                 sa.Text,
-                sa.ForeignKey("driftguard_nodes.text", ondelete="CASCADE"),
+                sa.ForeignKey(f"{table_prefix}driftguard_nodes.text", ondelete="CASCADE"),
                 primary_key=True,
             ),
             sa.Column("frequency", sa.Integer, nullable=False),
@@ -99,8 +101,9 @@ class PostgresPersistence:
         )
 
         logger.info(
-            "Postgres persistence configured with dsn=%s",
+            "Postgres persistence configured with dsn=%s table_prefix=%r",
             self._redact_dsn(dsn) if dsn else "<injected engine>",
+            table_prefix,
         )
 
     def save_graph(self, graph: nx.DiGraph) -> None:

@@ -96,9 +96,13 @@ def test_demo_runtime_is_offline_friendly_and_semantic():
     """The demo runtime should work without external model downloads and still match paraphrases."""
 
     graph_path = ROOT / "demo" / "output" / "pytest_demo_runtime_graph.json"
+    success_graph_path = graph_path.with_name(
+        f"{graph_path.stem}_success{graph_path.suffix}"
+    )
 
-    if graph_path.exists():
-        graph_path.unlink()
+    for path in (graph_path, success_graph_path):
+        if path.exists():
+            path.unlink()
 
     try:
         guard = build_demo_guard(build_demo_settings(str(graph_path)))
@@ -112,10 +116,11 @@ def test_demo_runtime_is_offline_friendly_and_semantic():
 
         assert review.warnings
         assert review.warnings[0].risk == "salt"
-        assert guard.stats()["nodes"] >= 3
+        assert guard.stats()["mistakes"]["nodes"] >= 3
     finally:
-        if graph_path.exists():
-            graph_path.unlink()
+        for path in (graph_path, success_graph_path):
+            if path.exists():
+                path.unlink()
 
 
 def test_demo_normalization_preserves_shared_concepts():

@@ -12,6 +12,10 @@ action → feedback → outcome
 
 and surfaces warnings when similar risky actions appear again.
 
+It also keeps a separate **success memory**: when an action resembles a past
+action that led to a good outcome, DriftGuard surfaces a positive
+reinforcement/recommendation alongside (or instead of) warnings.
+
 It works with:
 
 * MCP agents
@@ -66,7 +70,8 @@ without requiring changes to your planner architecture.
 DriftGuard provides:
 
 • semantic mistake memory
-• similarity-aware warning retrieval
+• semantic success memory with positive reinforcement
+• similarity-aware warning and reinforcement retrieval
 • policy-based execution guardrails
 • merge + deduplicate memory graphs
 • JSON, SQLite, or Postgres persistence
@@ -118,6 +123,9 @@ review = guard.before_step("increase salt")
 if review.warnings:
     print(review.warnings[0].risk)
 
+if review.reinforcements:
+    print(review.reinforcements[0].recommendation)
+
 guard.record(
     action="increase salt",
     feedback="too salty",
@@ -126,6 +134,43 @@ guard.record(
 ```
 
 DriftGuard now remembers this failure and warns on similar steps later.
+
+---
+
+## Positive Reinforcement (Success Memory)
+
+Alongside the mistake graph, DriftGuard maintains a second, independent
+**success graph**. Recording a successful `action → feedback → outcome`
+chain lets DriftGuard recommend that action again when a similar one is
+proposed later:
+
+```python
+guard.record_success(
+    action="add more salt",
+    feedback="well seasoned",
+    outcome="dish praised",
+)
+
+review = guard.before_step("add a pinch of salt")
+
+for reinforcement in review.reinforcements:
+    print(reinforcement.trigger, "->", reinforcement.recommendation)
+```
+
+Each `Reinforcement` has the same shape as a `Warning`, mirrored for
+positive outcomes:
+
+```python
+trigger: str          # the past successful action
+recommendation: str   # the positive feedback it produced
+frequency: int
+confidence: float
+```
+
+The mistake and success graphs are completely separate stores — they use
+their own merge/prune passes (via shared engines) and their own persistence
+files/tables, so recording a mistake never affects the success graph and
+vice versa.
 
 ---
 
@@ -167,11 +212,15 @@ Available tools:
 
 ```
 register_mistake
+register_success
 query_memory
 deep_prune
 graph_stats
 guard_metrics
 ```
+
+`query_memory` returns both `warnings` (from the mistake graph) and
+`reinforcements` (from the success graph) for the given context.
 
 Example Claude Desktop config:
 
@@ -290,6 +339,18 @@ settings = DriftGuardSettings(
 ```
 
 Embeddings are stored as JSONB on Postgres and plain JSON elsewhere; the schema (`driftguard_meta`, `driftguard_nodes`, `driftguard_edges`) is created automatically on first save.
+
+The mistake graph and the success graph are persisted independently, using
+the same backend:
+
+| backend  | mistake graph                 | success graph                         |
+| -------- | ----------------------------- | ------------------------------------- |
+| JSON     | `driftguard_graph.json`       | `driftguard_success_graph.json`       |
+| SQLite   | `driftguard_graph.sqlite3`    | `driftguard_success_graph.sqlite3`    |
+| Postgres | `driftguard_meta/nodes/edges` | `success_driftguard_meta/nodes/edges` |
+
+For Postgres, both table sets live in the same database/DSN — the success
+graph simply uses a `success_` table prefix.
 
 ---
 
@@ -414,6 +475,17 @@ settings = DriftGuardSettings(
 )
 ```
 
+The success graph has its own filepaths, separate from the mistake graph:
+
+```python
+settings = DriftGuardSettings(
+    graph_filepath="driftguard_graph.json",
+    success_graph_filepath="driftguard_success_graph.json",
+    sqlite_filepath="driftguard.sqlite3",
+    success_sqlite_filepath="driftguard_success.sqlite3",
+)
+```
+
 Full configuration supports:
 
 ```
@@ -448,6 +520,7 @@ Current release includes:
 
 * semantic merge engine
 * similarity retrieval engine
+* dual mistake/success memory graphs with positive reinforcement
 * graph persistence layer
 * SQLite and Postgres backends
 * MCP server

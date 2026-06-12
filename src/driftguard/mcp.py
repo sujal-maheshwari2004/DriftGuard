@@ -40,9 +40,30 @@ def create_mcp_server(
         )
 
     @mcp.tool()
+    def register_success(
+        action: str,
+        feedback: str,
+        outcome: str,
+    ):
+        """
+        Register a causal success event into DriftGuard memory.
+
+        Args:
+            action:   What was done (e.g. "add more salt")
+            feedback: The signal received (e.g. "well seasoned")
+            outcome:  The result (e.g. "dish praised")
+        """
+
+        return runtime.register_success(
+            action=action,
+            feedback=feedback,
+            outcome=outcome,
+        )
+
+    @mcp.tool()
     def query_memory(context: str):
         """
-        Retrieve causal warnings from DriftGuard memory.
+        Retrieve causal warnings and reinforcements from DriftGuard memory.
 
         Args:
             context: The current action or situation being considered.
@@ -60,6 +81,15 @@ def create_mcp_server(
                     "confidence": warning.confidence,
                 }
                 for warning in response.warnings
+            ],
+            "reinforcements": [
+                {
+                    "trigger": reinforcement.trigger,
+                    "recommendation": reinforcement.recommendation,
+                    "frequency": reinforcement.frequency,
+                    "confidence": reinforcement.confidence,
+                }
+                for reinforcement in response.reinforcements
             ],
             "chains": response.chains,
             "confidence": response.confidence,

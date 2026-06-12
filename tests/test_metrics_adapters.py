@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from driftguard.adapters.generic import review_payload
 from driftguard.adapters.langgraph import make_langgraph_review_node
@@ -15,11 +15,20 @@ class FakeWarning:
 
 
 @dataclass
+class FakeReinforcement:
+    trigger: str
+    recommendation: str
+    confidence: float
+    frequency: int = 1
+
+
+@dataclass
 class FakeResponse:
     query: str
     warnings: list[FakeWarning]
     chains: list[list[str]]
     confidence: float
+    reinforcements: list[FakeReinforcement] = field(default_factory=list)
 
 
 class FakeRuntime:
@@ -72,6 +81,7 @@ def test_review_payload_returns_review_metadata():
             warnings=[FakeWarning("increase salt", "too salty", 0.86)],
             chains=[["increase salt", "too salty", "dish ruined"]],
             confidence=0.86,
+            reinforcements=[FakeReinforcement("add more salt", "well seasoned", 0.9)],
         )
     )
     guard = DriftGuard(runtime=runtime)
@@ -83,8 +93,10 @@ def test_review_payload_returns_review_metadata():
 
     assert result["payload"] == {"action": "increase salt", "attempt": 2}
     assert result["warnings_count"] == 1
+    assert result["reinforcements_count"] == 1
     assert result["confidence"] == 0.86
     assert result["review"].warnings[0].risk == "too salty"
+    assert result["review"].reinforcements[0].recommendation == "well seasoned"
     assert runtime.query_calls == ["increase salt"]
 
 
@@ -95,6 +107,7 @@ def test_make_langgraph_review_node_maps_review_into_state():
             warnings=[FakeWarning("increase salt", "too salty", 0.91)],
             chains=[["increase salt", "too salty", "dish ruined"]],
             confidence=0.91,
+            reinforcements=[FakeReinforcement("add more salt", "well seasoned", 0.92)],
         )
     )
     guard = DriftGuard(runtime=runtime)
@@ -108,6 +121,12 @@ def test_make_langgraph_review_node_maps_review_into_state():
         "trigger": "increase salt",
         "risk": "too salty",
         "confidence": 0.91,
+    }
+    assert state_update["guard_reinforcements_count"] == 1
+    assert state_update["guard_top_reinforcement"] == {
+        "trigger": "add more salt",
+        "recommendation": "well seasoned",
+        "confidence": 0.92,
     }
     assert state_update["guard_review"].query == "increase salt"
     assert runtime.query_calls == ["increase salt"]

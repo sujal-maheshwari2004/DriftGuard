@@ -232,6 +232,46 @@ def test_persistence_save_load(writable_filepath):
     assert isinstance(loaded.nodes["test_node"]["embedding"], np.ndarray)
 
 
+def test_pipeline_returns_reinforcements_from_success_graph(graph_store, monkeypatch):
+    """A second graph store seeded with a success event should yield reinforcements."""
+
+    monkeypatch.setattr(
+        "driftguard.graph.merge_engine.EmbeddingEngine",
+        lambda model_name=None, device=None: StubEmbeddingEngine(
+            {
+                "increase salt": [1.0, 0.0, 0.0],
+                "add more salt": [0.96, 0.04, 0.0],
+                "too salty": [0.0, 1.0, 0.0],
+                "over-seasoned": [0.0, 0.97, 0.03],
+                "dish ruined": [0.0, 0.0, 1.0],
+                "well seasoned": [0.0, 0.0, 0.97],
+                "dish praised": [0.0, 0.03, 0.97],
+            }
+        ),
+    )
+
+    success_store = GraphStore(
+        merge_engine=MergeEngine(),
+        prune_engine=PruneEngine(),
+        persistence_engine=DummyPersistence(),
+    )
+
+    success_store.add_event(
+        Event(
+            action="add more salt",
+            feedback="well seasoned",
+            outcome="dish praised",
+        )
+    )
+
+    retriever = RetrievalEngine(graph_store, success_store)
+    result = retriever.query("add more salt")
+
+    assert result.reinforcements
+    assert result.reinforcements[0].trigger == "add more salt"
+    assert result.reinforcements[0].recommendation == "well seasoned"
+
+
 def test_related_chains_avoid_cycles_and_limit_growth():
     """Graph traversal should avoid revisiting nodes and respect path caps."""
 

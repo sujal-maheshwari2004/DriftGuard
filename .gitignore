@@ -37,6 +37,7 @@ ENV/
 *.tmp
 *.pkl
 driftguard_graph.json
+driftguard_success_graph.json
 persistence-test-*.json
 pipeline-test-*.json
 demo/output/

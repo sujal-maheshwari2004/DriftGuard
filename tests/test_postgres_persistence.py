@@ -149,6 +149,60 @@ def test_postgres_persistence_returns_none_when_no_tables_exist(persistence):
     assert persistence.load_graph() is None
 
 
+def test_postgres_persistence_table_prefix_isolates_graphs(engine):
+    """A table_prefix should give a graph its own independent table set."""
+
+    mistakes = PostgresPersistence(engine=engine)
+    successes = PostgresPersistence(engine=engine, table_prefix="success_")
+
+    success_graph = nx.DiGraph()
+    now = datetime.now(UTC)
+    success_graph.add_node(
+        "add more salt",
+        type="action",
+        embedding=np.array([0.9, 0.1], dtype=np.float32),
+        frequency=2,
+        first_seen=now,
+        last_seen=now,
+    )
+    success_graph.add_node(
+        "well seasoned",
+        type="feedback",
+        embedding=np.array([0.1, 0.9], dtype=np.float32),
+        frequency=2,
+        first_seen=now,
+        last_seen=now,
+    )
+    success_graph.add_edge(
+        "add more salt",
+        "well seasoned",
+        frequency=2,
+        weight=1.0,
+        created_at=now,
+    )
+
+    mistakes.save_graph(_build_graph())
+    successes.save_graph(success_graph)
+
+    loaded_mistakes = mistakes.load_graph()
+    loaded_successes = successes.load_graph()
+
+    assert set(loaded_mistakes.nodes) == {"increase salt", "too salty"}
+    assert set(loaded_successes.nodes) == {"add more salt", "well seasoned"}
+
+    inspector = sa.inspect(engine)
+    table_names = set(inspector.get_table_names())
+    assert {"driftguard_nodes", "driftguard_edges"} <= table_names
+    assert {"success_driftguard_nodes", "success_driftguard_edges"} <= table_names
+
+    with engine.connect() as connection:
+        schema_name = connection.execute(
+            sa.text("SELECT value FROM success_driftguard_meta WHERE key = 'schema_name'")
+        ).scalar_one()
+
+    assert schema_name == POSTGRES_SCHEMA_NAME
+
+
 def test_postgres_persistence_redacts_password_in_dsn(persistence):
     """Postgres persistence should never log a raw DSN password."""
 

@@ -340,8 +340,14 @@ def build_demo_settings(
     *,
     log_level: str = "WARNING",
 ) -> DriftGuardSettings:
+    graph_path = Path(graph_filepath)
+    success_graph_filepath = str(
+        graph_path.with_name(f"{graph_path.stem}_success{graph_path.suffix}")
+    )
+
     return DriftGuardSettings(
         graph_filepath=graph_filepath,
+        success_graph_filepath=success_graph_filepath,
         retrieval_top_k=4,
         retrieval_min_similarity=0.58,
         traversal_max_depth=2,
@@ -549,7 +555,7 @@ class KitchenLineDemoAgent:
             if step_delay > 0 and time.monotonic() - start < duration_seconds:
                 time.sleep(step_delay)
 
-        final_stats = self.guard.stats()
+        final_stats = self.guard.stats()["mistakes"]
         print("\nDemo finished.")
         print(
             f"Final graph stats: nodes={final_stats['nodes']} "
@@ -559,7 +565,7 @@ class KitchenLineDemoAgent:
 
     def run_step(self, step_number: int) -> None:
         plan = build_step_plan(step_number)
-        before_stats = self.guard.stats()
+        before_stats = self.guard.stats()["mistakes"]
         review = self.guard.before_step(plan.intent)
         switch_to_safe = should_switch_to_safe_action(
             step_number,
@@ -603,7 +609,7 @@ class KitchenLineDemoAgent:
                 feedback=plan.risky_event.feedback,
                 outcome=plan.risky_event.outcome,
             )
-            after_event_stats = self.guard.stats()
+            after_event_stats = self.guard.stats()["mistakes"]
             growth = summarize_event_growth(
                 before_stats,
                 after_event_stats,
@@ -628,8 +634,8 @@ class KitchenLineDemoAgent:
         prune_result = None
         if should_prune(step_number, self.prune_every):
             prune_result = self.guard.prune()
-            before_prune = prune_result["before"]
-            after_prune = prune_result["after"]
+            before_prune = prune_result["mistakes"]["before"]
+            after_prune = prune_result["mistakes"]["after"]
             print(
                 "Prune: "
                 f"nodes {before_prune['nodes']} -> {after_prune['nodes']}, "
@@ -638,7 +644,7 @@ class KitchenLineDemoAgent:
         else:
             print("Prune: skipped this step")
 
-        final_stats = self.guard.stats()
+        final_stats = self.guard.stats()["mistakes"]
         print(
             f"Graph stats now: nodes={final_stats['nodes']} "
             f"edges={final_stats['edges']}\n"
@@ -679,7 +685,10 @@ class KitchenLineDemoAgent:
 
 
 def _reset_demo_files(graph_file: Path, trace_file: Path) -> None:
-    for path in (graph_file, trace_file):
+    success_graph_file = graph_file.with_name(
+        f"{graph_file.stem}_success{graph_file.suffix}"
+    )
+    for path in (graph_file, trace_file, success_graph_file):
         if path.exists():
             path.unlink()
 
@@ -709,7 +718,7 @@ def main(argv: list[str] | None = None) -> None:
             step_delay=args.step_delay,
         )
     except KeyboardInterrupt:
-        final_stats = agent.guard.stats()
+        final_stats = agent.guard.stats()["mistakes"]
         print("\nDemo interrupted by user.")
         print(
             f"Graph preserved at {args.graph_file} with "

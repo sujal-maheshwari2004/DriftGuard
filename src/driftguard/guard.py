@@ -52,6 +52,18 @@ class DriftGuard:
             outcome=outcome,
         )
 
+    def record_success(
+        self,
+        action: str,
+        feedback: str,
+        outcome: str,
+    ) -> dict:
+        return self.runtime.register_success(
+            action=action,
+            feedback=feedback,
+            outcome=outcome,
+        )
+
     def prune(self) -> dict:
         return self.runtime.deep_prune()
 

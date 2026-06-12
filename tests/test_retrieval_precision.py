@@ -95,6 +95,19 @@ class FakeRecencyStore(FakeNodeMatchStore):
         }
 
 
+@dataclass
+class FakeSuccessStore(FakeNodeMatchStore):
+    def __post_init__(self):
+        self.graph = nx.DiGraph()
+        self.graph.add_edge("add more salt", "well seasoned", frequency=1)
+        self.find_calls = []
+
+    def get_related_chains(self, node_text: str, depth: int = 3):
+        if node_text == "add more salt":
+            return [["add more salt", "well seasoned", "dish praised"]]
+        return []
+
+
 def test_retrieval_engine_filters_out_weak_matches():
     store = FakeNodeMatchStore(matches=[("increase salt", 0.58)])
     retriever = RetrievalEngine(
@@ -167,3 +180,34 @@ def test_retrieval_confidence_prefers_more_recent_trigger_when_scores_match():
     assert recent_result.warnings
     assert stale_result.warnings
     assert recent_result.confidence > stale_result.confidence
+
+
+def test_retrieval_engine_without_success_store_returns_no_reinforcements():
+    store = FakeNodeMatchStore(matches=[("increase salt", 0.95)])
+    retriever = RetrievalEngine(store, min_similarity=0.60)
+
+    result = retriever.query("increase salt")
+
+    assert result.reinforcements == []
+
+
+def test_retrieval_engine_builds_reinforcements_from_success_graph():
+    mistake_store = FakeNodeMatchStore(matches=[("increase salt", 0.95)])
+    success_store = FakeSuccessStore(matches=[("add more salt", 0.95)])
+
+    retriever = RetrievalEngine(
+        mistake_store,
+        success_store,
+        min_similarity=0.60,
+    )
+
+    result = retriever.query("season the dish")
+
+    assert result.warnings
+    assert result.warnings[0].trigger == "increase salt"
+    assert result.warnings[0].risk == "too salty"
+
+    assert result.reinforcements
+    assert result.reinforcements[0].trigger == "add more salt"
+    assert result.reinforcements[0].recommendation == "well seasoned"
+    assert result.reinforcements[0].confidence > 0.0

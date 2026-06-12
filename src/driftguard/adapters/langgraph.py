@@ -14,6 +14,8 @@ def make_langgraph_review_node(
     warnings_key: str = "guard_warnings_count",
     confidence_key: str = "guard_confidence",
     top_warning_key: str = "guard_top_warning",
+    reinforcements_key: str = "guard_reinforcements_count",
+    top_reinforcement_key: str = "guard_top_reinforcement",
 ):
     def review_node(state: dict) -> dict:
         acknowledged = (
@@ -28,6 +30,7 @@ def make_langgraph_review_node(
             acknowledged=acknowledged,
         )
         top_warning = review.warnings[0] if review.warnings else None
+        top_reinforcement = review.reinforcements[0] if review.reinforcements else None
         return {
             review_key: review,
             warnings_key: len(review.warnings),
@@ -39,6 +42,16 @@ def make_langgraph_review_node(
                     "confidence": top_warning.confidence,
                 }
                 if top_warning is not None
+                else None
+            ),
+            reinforcements_key: len(review.reinforcements),
+            top_reinforcement_key: (
+                {
+                    "trigger": top_reinforcement.trigger,
+                    "recommendation": top_reinforcement.recommendation,
+                    "confidence": top_reinforcement.confidence,
+                }
+                if top_reinforcement is not None
                 else None
             ),
         }

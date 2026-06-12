@@ -28,5 +28,6 @@ def review_payload(
         "payload": payload,
         "review": review,
         "warnings_count": len(review.warnings),
+        "reinforcements_count": len(review.reinforcements),
         "confidence": review.confidence,
     }

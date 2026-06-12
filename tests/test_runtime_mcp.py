@@ -4,7 +4,7 @@ import pytest
 
 from driftguard.config import DriftGuardSettings
 from driftguard.metrics import DriftGuardMetrics
-from driftguard.models.response import RetrievalResponse, Warning
+from driftguard.models.response import Reinforcement, RetrievalResponse, Warning
 from driftguard import mcp as mcp_module
 from driftguard import runtime as runtime_module
 
@@ -81,12 +81,14 @@ class FakeRetrievalEngine:
     def __init__(
         self,
         graph_store,
-        top_k: int,
-        min_similarity: float,
+        success_graph_store=None,
+        top_k: int = 5,
+        min_similarity: float = 0.0,
         recency_weight: float = 0.15,
         metrics=None,
     ):
         self.graph_store = graph_store
+        self.success_graph_store = success_graph_store
         self.top_k = top_k
         self.min_similarity = min_similarity
         self.recency_weight = recency_weight
@@ -100,6 +102,7 @@ class FakeRetrievalEngine:
             warnings=[Warning("increase salt", "too salty", 2, 0.8)],
             chains=[["increase salt", "too salty", "dish ruined"]],
             confidence=0.8,
+            reinforcements=[Reinforcement("add more salt", "well seasoned", 3, 0.9)],
         )
 
 
@@ -128,13 +131,19 @@ def test_build_runtime_threads_settings_into_components(monkeypatch):
     assert runtime.prune_engine.node_stale_days == 12
     assert runtime.prune_engine.edge_min_frequency == 4
     assert runtime.persistence.filepath == "custom-graph.json"
+    assert runtime.success_persistence.filepath == "driftguard_success_graph.json"
     assert runtime.graph_store.traversal_max_depth == 6
     assert runtime.graph_store.traversal_max_branching == 4
     assert runtime.graph_store.traversal_max_paths == 25
+    assert runtime.success_graph_store.traversal_max_depth == 6
+    assert runtime.success_graph_store.traversal_max_branching == 4
+    assert runtime.success_graph_store.traversal_max_paths == 25
     assert runtime.retrieval_engine.top_k == 7
     assert runtime.retrieval_engine.min_similarity == 0.77
     assert runtime.retrieval_engine.recency_weight == settings.retrieval_recency_weight
+    assert runtime.retrieval_engine.success_graph_store is runtime.success_graph_store
     assert runtime.graph_store.load_calls == 1
+    assert runtime.success_graph_store.load_calls == 1
 
 
 def test_build_runtime_can_skip_auto_load(monkeypatch):
@@ -152,6 +161,7 @@ def test_build_runtime_can_skip_auto_load(monkeypatch):
     )
 
     assert runtime.graph_store.load_calls == 0
+    assert runtime.success_graph_store.load_calls == 0
 
 
 def test_build_runtime_selects_sqlite_persistence_from_settings(monkeypatch):
@@ -171,6 +181,8 @@ def test_build_runtime_selects_sqlite_persistence_from_settings(monkeypatch):
 
     assert isinstance(runtime.persistence, FakeSQLitePersistence)
     assert runtime.persistence.filepath == "custom-graph.sqlite3"
+    assert isinstance(runtime.success_persistence, FakeSQLitePersistence)
+    assert runtime.success_persistence.filepath == settings.success_sqlite_filepath
 
 
 def test_runtime_register_query_prune_and_stats_delegate_to_components():
@@ -180,7 +192,9 @@ def test_runtime_register_query_prune_and_stats_delegate_to_components():
         merge_engine=object(),
         prune_engine=FakePruneEngine(node_stale_days=1, edge_min_frequency=1),
         persistence=FakePersistence(filepath="graph.json"),
+        success_persistence=FakePersistence(filepath="success-graph.json"),
         graph_store=FakeGraphStore(None, None, None),
+        success_graph_store=FakeGraphStore(None, None, None),
         retrieval_engine=FakeRetrievalEngine(
             graph_store=None,
             top_k=5,
@@ -189,19 +203,26 @@ def test_runtime_register_query_prune_and_stats_delegate_to_components():
         metrics=metrics,
     )
     runtime.retrieval_engine.graph_store = runtime.graph_store
+    runtime.retrieval_engine.success_graph_store = runtime.success_graph_store
 
     record = runtime.register_mistake("increase salt", "too salty", "dish ruined")
+    success_record = runtime.register_success("add more salt", "well seasoned", "dish praised")
     query = runtime.query_memory("increase salt")
     prune = runtime.deep_prune()
     stats = runtime.graph_stats()
 
     assert record["status"] == "stored"
+    assert success_record["status"] == "stored"
     assert runtime.graph_store.save_calls == 2
+    assert runtime.success_graph_store.save_calls == 2
     assert runtime.graph_store.added_events[0].action == "increase salt"
+    assert runtime.success_graph_store.added_events[0].action == "add more salt"
     assert query.query == "increase salt"
-    assert runtime.prune_engine.deep_prune_calls == [runtime.graph_store.graph]
-    assert prune == {
-        "status": "pruned",
+    assert runtime.prune_engine.deep_prune_calls == [
+        runtime.graph_store.graph,
+        runtime.success_graph_store.graph,
+    ]
+    expected_prune_summary = {
         "before": {"nodes": 4, "edges": 3},
         "after": {"nodes": 4, "edges": 3},
         "details": {
@@ -212,8 +233,16 @@ def test_runtime_register_query_prune_and_stats_delegate_to_components():
             "removed_isolated_nodes": 0,
         },
     }
-    assert stats == {"nodes": 4, "edges": 3}
-    assert runtime.metrics_snapshot()["counters"]["records_total"] == 1
+    assert prune == {
+        "status": "pruned",
+        "mistakes": expected_prune_summary,
+        "successes": expected_prune_summary,
+    }
+    assert stats == {
+        "mistakes": {"nodes": 4, "edges": 3},
+        "successes": {"nodes": 4, "edges": 3},
+    }
+    assert runtime.metrics_snapshot()["counters"]["records_total"] == 2
     assert runtime.metrics_snapshot()["counters"]["prune_runs_total"] == 1
 
 
@@ -228,6 +257,10 @@ class FakeRuntime:
         self.calls.append(("register_mistake", action, feedback, outcome))
         return {"status": "stored", "action": action, "feedback": feedback, "outcome": outcome}
 
+    def register_success(self, action: str, feedback: str, outcome: str):
+        self.calls.append(("register_success", action, feedback, outcome))
+        return {"status": "stored", "action": action, "feedback": feedback, "outcome": outcome}
+
     def query_memory(self, context: str):
         self.calls.append(("query_memory", context))
         return self.query_response
@@ -238,7 +271,7 @@ class FakeRuntime:
 
     def graph_stats(self):
         self.calls.append(("graph_stats",))
-        return {"nodes": 2, "edges": 1}
+        return {"mistakes": {"nodes": 2, "edges": 1}, "successes": {"nodes": 0, "edges": 0}}
 
     def metrics_snapshot(self):
         self.calls.append(("metrics_snapshot",))
@@ -256,6 +289,7 @@ async def test_create_mcp_server_registers_tools_and_calls_runtime():
             warnings=[Warning("increase salt", "too salty", 2, 0.8)],
             chains=[["increase salt", "too salty", "dish ruined"]],
             confidence=0.8,
+            reinforcements=[Reinforcement("add more salt", "well seasoned", 3, 0.9)],
         )
     )
 
@@ -270,11 +304,16 @@ async def test_create_mcp_server_registers_tools_and_calls_runtime():
         "guard_metrics",
         "query_memory",
         "register_mistake",
+        "register_success",
     ]
 
     register_result = await server.call_tool(
         "register_mistake",
         {"action": "increase salt", "feedback": "too salty", "outcome": "dish ruined"},
+    )
+    register_success_result = await server.call_tool(
+        "register_success",
+        {"action": "add more salt", "feedback": "well seasoned", "outcome": "dish praised"},
     )
     query_result = await server.call_tool("query_memory", {"context": "increase salt"})
     prune_result = await server.call_tool("deep_prune", {})
@@ -287,16 +326,27 @@ async def test_create_mcp_server_registers_tools_and_calls_runtime():
         "feedback": "too salty",
         "outcome": "dish ruined",
     }
+    assert register_success_result.structured_content == {
+        "status": "stored",
+        "action": "add more salt",
+        "feedback": "well seasoned",
+        "outcome": "dish praised",
+    }
     assert query_result.structured_content["query"] == "increase salt"
     assert query_result.structured_content["warnings"][0]["risk"] == "too salty"
+    assert query_result.structured_content["reinforcements"][0]["recommendation"] == "well seasoned"
     assert prune_result.structured_content == {"status": "pruned"}
-    assert stats_result.structured_content == {"nodes": 2, "edges": 1}
+    assert stats_result.structured_content == {
+        "mistakes": {"nodes": 2, "edges": 1},
+        "successes": {"nodes": 0, "edges": 0},
+    }
     assert metrics_result.structured_content == {
         "counters": {"reviews_total": 3},
         "gauges": {"last_review_confidence": 0.8},
     }
     assert runtime.calls == [
         ("register_mistake", "increase salt", "too salty", "dish ruined"),
+        ("register_success", "add more salt", "well seasoned", "dish praised"),
         ("query_memory", "increase salt"),
         ("deep_prune",),
         ("graph_stats",),

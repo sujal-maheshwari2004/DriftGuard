@@ -244,7 +244,10 @@ def _build_model(*, model_name: str, temperature: float):
 
 
 def _reset_demo_files(graph_file: Path, trace_file: Path) -> None:
-    for path in (graph_file, trace_file):
+    success_graph_file = graph_file.with_name(
+        f"{graph_file.stem}_success{graph_file.suffix}"
+    )
+    for path in (graph_file, trace_file, success_graph_file):
         if path.exists():
             path.unlink()
 
@@ -377,7 +380,7 @@ def build_langgraph_app(
             "candidate_action": parsed["action"],
             "final_action": parsed["action"],
             "planner_thought": parsed["thought"],
-            "stats_before": guard.stats(),
+            "stats_before": guard.stats()["mistakes"],
         }
 
     def review_action(state: DemoState) -> DemoState:
@@ -422,7 +425,7 @@ def build_langgraph_app(
                 outcome=assessment.outcome or "",
             )
 
-        after_stats = guard.stats()
+        after_stats = guard.stats()["mistakes"]
         growth = summarize_event_growth(
             before_stats,
             after_stats,
@@ -433,7 +436,7 @@ def build_langgraph_app(
         if should_prune(state["step"], prune_every):
             prune_result = guard.prune()
 
-        final_stats = guard.stats()
+        final_stats = guard.stats()["mistakes"]
         payload = {
             "step": state["step"],
             "candidate_action": state["candidate_action"],
@@ -471,10 +474,11 @@ def build_langgraph_app(
             f"merged_nodes~{growth['estimated_merged_nodes']}"
         )
         if prune_result is not None:
+            mistakes_prune = prune_result["mistakes"]
             print(
                 "Prune: "
-                f"nodes {prune_result['before']['nodes']} -> {prune_result['after']['nodes']}, "
-                f"edges {prune_result['before']['edges']} -> {prune_result['after']['edges']}"
+                f"nodes {mistakes_prune['before']['nodes']} -> {mistakes_prune['after']['nodes']}, "
+                f"edges {mistakes_prune['before']['edges']} -> {mistakes_prune['after']['edges']}"
             )
         else:
             print("Prune: skipped this step")
@@ -575,7 +579,7 @@ def run_langgraph_demo(
         if step_delay > 0 and time.monotonic() - started_at < duration_seconds:
             time.sleep(step_delay)
 
-    final_stats = guard.stats()
+    final_stats = guard.stats()["mistakes"]
     print("\nLangGraph demo finished.")
     print(
         f"Final graph stats: nodes={final_stats['nodes']} "

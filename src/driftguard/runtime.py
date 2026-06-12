@@ -23,7 +23,9 @@ class DriftGuardRuntime:
     merge_engine: MergeEngine
     prune_engine: PruneEngine
     persistence: GraphPersistence
+    success_persistence: GraphPersistence
     graph_store: GraphStore
+    success_graph_store: GraphStore
     retrieval_engine: RetrievalEngine
     metrics: DriftGuardMetrics
 
@@ -62,38 +64,103 @@ class DriftGuardRuntime:
         )
         return response
 
+    def register_success(
+        self,
+        action: str,
+        feedback: str,
+        outcome: str,
+    ) -> dict:
+        logger.info(
+            "Registering success action=%r feedback=%r outcome=%r",
+            action,
+            feedback,
+            outcome,
+        )
+
+        event = Event(
+            action=action,
+            feedback=feedback,
+            outcome=outcome,
+        )
+
+        self.success_graph_store.add_event(event)
+        self.success_graph_store.save()
+        self.metrics.record_storage()
+
+        response = {
+            "status": "stored",
+            "action": action,
+            "feedback": feedback,
+            "outcome": outcome,
+        }
+        logger.info(
+            "Success stored successfully; stats=%s",
+            self.success_graph_store.stats(),
+        )
+        return response
+
     def query_memory(self, context: str):
         logger.info("Querying memory for context=%r", context)
         response = self.retrieval_engine.query(context)
         logger.info(
-            "Query complete context=%r warnings=%d chains=%d confidence=%.2f",
+            "Query complete context=%r warnings=%d reinforcements=%d chains=%d confidence=%.2f",
             context,
             len(response.warnings),
+            len(response.reinforcements),
             len(response.chains),
             response.confidence,
         )
         return response
 
     def deep_prune(self) -> dict:
-        before = self.graph_store.stats()
-        logger.info("Starting deep prune with stats=%s", before)
-        prune_summary = self.prune_engine.deep_prune(self.graph_store.graph)
-        self.graph_store.save()
-        after = self.graph_store.stats()
-        self.metrics.record_prune(
-            nodes_removed=max(0, before["nodes"] - after["nodes"]),
-            edges_removed=max(0, before["edges"] - after["edges"]),
+        mistakes_before = self.graph_store.stats()
+        successes_before = self.success_graph_store.stats()
+        logger.info(
+            "Starting deep prune with mistakes=%s successes=%s",
+            mistakes_before,
+            successes_before,
         )
-        logger.info("Deep prune finished with stats=%s", after)
+
+        mistakes_summary = self.prune_engine.deep_prune(self.graph_store.graph)
+        successes_summary = self.prune_engine.deep_prune(self.success_graph_store.graph)
+
+        self.graph_store.save()
+        self.success_graph_store.save()
+
+        mistakes_after = self.graph_store.stats()
+        successes_after = self.success_graph_store.stats()
+
+        self.metrics.record_prune(
+            nodes_removed=max(0, mistakes_before["nodes"] - mistakes_after["nodes"])
+            + max(0, successes_before["nodes"] - successes_after["nodes"]),
+            edges_removed=max(0, mistakes_before["edges"] - mistakes_after["edges"])
+            + max(0, successes_before["edges"] - successes_after["edges"]),
+        )
+
+        logger.info(
+            "Deep prune finished with mistakes=%s successes=%s",
+            mistakes_after,
+            successes_after,
+        )
         return {
             "status": "pruned",
-            "before": before,
-            "after": after,
-            "details": prune_summary,
+            "mistakes": {
+                "before": mistakes_before,
+                "after": mistakes_after,
+                "details": mistakes_summary,
+            },
+            "successes": {
+                "before": successes_before,
+                "after": successes_after,
+                "details": successes_summary,
+            },
         }
 
     def graph_stats(self) -> dict:
-        stats = self.graph_store.stats()
+        stats = {
+            "mistakes": self.graph_store.stats(),
+            "successes": self.success_graph_store.stats(),
+        }
         logger.debug("Graph stats requested: %s", stats)
         return stats
 
@@ -109,6 +176,7 @@ def build_runtime(
     merge_engine: MergeEngine | None = None,
     prune_engine: PruneEngine | None = None,
     persistence: GraphPersistence | None = None,
+    success_persistence: GraphPersistence | None = None,
     metrics: DriftGuardMetrics | None = None,
     auto_load: bool = True,
 ) -> DriftGuardRuntime:
@@ -123,6 +191,7 @@ def build_runtime(
         edge_min_frequency=settings.prune_edge_min_frequency,
     )
     persistence = persistence or _build_persistence(settings)
+    success_persistence = success_persistence or _build_persistence(settings, success=True)
 
     graph_store = GraphStore(
         merge_engine=merge_engine,
@@ -133,8 +202,18 @@ def build_runtime(
         traversal_max_branching=settings.traversal_max_branching,
         traversal_max_paths=settings.traversal_max_paths,
     )
+    success_graph_store = GraphStore(
+        merge_engine=merge_engine,
+        prune_engine=prune_engine,
+        persistence_engine=success_persistence,
+        metrics=metrics,
+        traversal_max_depth=settings.traversal_max_depth,
+        traversal_max_branching=settings.traversal_max_branching,
+        traversal_max_paths=settings.traversal_max_paths,
+    )
     retrieval_engine = RetrievalEngine(
         graph_store,
+        success_graph_store,
         top_k=settings.retrieval_top_k,
         min_similarity=settings.retrieval_min_similarity,
         recency_weight=settings.retrieval_recency_weight,
@@ -146,32 +225,43 @@ def build_runtime(
         merge_engine=merge_engine,
         prune_engine=prune_engine,
         persistence=persistence,
+        success_persistence=success_persistence,
         graph_store=graph_store,
+        success_graph_store=success_graph_store,
         retrieval_engine=retrieval_engine,
         metrics=metrics,
     )
 
     if auto_load:
         runtime.graph_store.load()
+        runtime.success_graph_store.load()
         logger.info(
-            "Runtime ready with loaded graph stats=%s",
+            "Runtime ready with loaded graphs mistakes=%s successes=%s",
             runtime.graph_store.stats(),
+            runtime.success_graph_store.stats(),
         )
     else:
-        logger.info("Runtime ready without auto-loading persisted graph")
+        logger.info("Runtime ready without auto-loading persisted graphs")
 
     return runtime
 
 
-def _build_persistence(settings: DriftGuardSettings) -> GraphPersistence:
+def _build_persistence(
+    settings: DriftGuardSettings, *, success: bool = False
+) -> GraphPersistence:
     if settings.storage_backend == "json":
-        return Persistence(filepath=settings.graph_filepath)
+        filepath = settings.success_graph_filepath if success else settings.graph_filepath
+        return Persistence(filepath=filepath)
 
     if settings.storage_backend == "sqlite":
-        return SQLitePersistence(filepath=settings.sqlite_filepath)
+        filepath = (
+            settings.success_sqlite_filepath if success else settings.sqlite_filepath
+        )
+        return SQLitePersistence(filepath=filepath)
 
     if settings.storage_backend == "postgres":
-        return PostgresPersistence(dsn=settings.postgres_dsn)
+        table_prefix = "success_" if success else ""
+        return PostgresPersistence(dsn=settings.postgres_dsn, table_prefix=table_prefix)
 
     raise ValueError(
         f"Unsupported storage backend: {settings.storage_backend!r}"
