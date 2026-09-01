@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "driftguard"
-version = "0.1.0"
+name = "driftguard-ai"
+version = "0.2.1"
 description = "A semantic mistake-memory system for AI agents with MCP and in-process guardrail entrypoints."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"

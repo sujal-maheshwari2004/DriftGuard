@@ -13,7 +13,10 @@ def test_pyproject_has_publishable_metadata():
 
     project = data["project"]
 
-    assert project["name"] == "driftguard"
+    # The distribution is driftguard-ai on PyPI; the import package is
+    # driftguard. pyproject carried the import name, so a build from this
+    # tree would have published to the wrong project.
+    assert project["name"] == "driftguard-ai"
     assert "Add your description here" not in project["description"]
     assert "pytest>=9.0.2" not in project["dependencies"]
     assert project["scripts"]["driftguard-mcp"] == "driftguard.server:main"
