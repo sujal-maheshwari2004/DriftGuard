@@ -9,6 +9,7 @@ import numpy as np
 
 from driftguard.errors import DriftGuardDependencyError
 from driftguard.logging_config import get_logger
+from driftguard.utils.node_roles import parse_roles, serialize_roles
 
 
 logger = get_logger(__name__)
@@ -116,7 +117,7 @@ class PostgresPersistence:
             node_rows = [
                 {
                     "text": node_text,
-                    "type": node_data.get("type"),
+                    "type": serialize_roles(node_data.get("type")),
                     "embedding": self._serialize_embedding(node_data.get("embedding")),
                     "frequency": int(node_data.get("frequency", 1)),
                     "first_seen": self._serialize_datetime(node_data.get("first_seen")),
@@ -161,7 +162,7 @@ class PostgresPersistence:
             for row in connection.execute(sa.select(self._nodes_table)):
                 graph.add_node(
                     row.text,
-                    type=row.type,
+                    type=parse_roles(row.type),
                     embedding=self._deserialize_embedding(row.embedding),
                     frequency=row.frequency,
                     first_seen=self._deserialize_datetime(row.first_seen),

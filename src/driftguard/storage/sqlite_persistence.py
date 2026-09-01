@@ -9,6 +9,7 @@ import networkx as nx
 import numpy as np
 
 from driftguard.logging_config import get_logger
+from driftguard.utils.node_roles import parse_roles, serialize_roles
 
 
 logger = get_logger(__name__)
@@ -52,7 +53,7 @@ class SQLitePersistence:
                     """,
                     (
                         node_text,
-                        node_data.get("type"),
+                        serialize_roles(node_data.get("type")),
                         self._serialize_embedding(node_data.get("embedding")),
                         int(node_data.get("frequency", 1)),
                         self._serialize_datetime(node_data.get("first_seen")),
@@ -116,7 +117,7 @@ class SQLitePersistence:
             ):
                 graph.add_node(
                     row[0],
-                    type=row[1],
+                    type=parse_roles(row[1]),
                     embedding=self._deserialize_embedding(row[2]),
                     frequency=row[3],
                     first_seen=self._deserialize_datetime(row[4]),

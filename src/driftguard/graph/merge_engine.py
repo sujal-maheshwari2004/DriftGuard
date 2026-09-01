@@ -3,6 +3,7 @@ import numpy as np
 from driftguard.config import DEFAULT_SETTINGS, DriftGuardSettings
 from driftguard.embedding.embedding_engine import EmbeddingEngine
 from driftguard.logging_config import get_logger
+from driftguard.utils.node_roles import has_role
 from driftguard.utils.normalization import normalize_text
 from driftguard.utils.similarity import cosine_similarity
 
@@ -92,7 +93,7 @@ class MergeEngine:
         candidates = [
             node
             for node in graph.nodes
-            if graph.nodes[node]["type"] == node_type
+            if has_role(graph.nodes[node].get("type"), node_type)
             and literal_tokens(node) == query_literals
         ]
 
@@ -148,7 +149,8 @@ class MergeEngine:
         candidates = [
             node
             for node in graph.nodes
-            if node_type is None or graph.nodes[node]["type"] == node_type
+            if node_type is None
+            or has_role(graph.nodes[node].get("type"), node_type)
         ]
 
         if not candidates:

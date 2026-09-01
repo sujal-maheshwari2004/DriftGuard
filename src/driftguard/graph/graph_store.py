@@ -3,6 +3,7 @@ import networkx as nx
 from datetime import datetime, UTC
 
 from driftguard.logging_config import get_logger
+from driftguard.utils.node_roles import add_role
 
 
 logger = get_logger(__name__)
@@ -231,13 +232,32 @@ class GraphStore:
 
     def _create_node(self, text: str, node_type: str) -> str:
 
-        embedding = self.merge_engine.embed(text)
         now = datetime.now(UTC)
+
+        # The same text can hold more than one role — "restart the server" is
+        # an action in one event and an outcome in another. add_node() would
+        # replace the existing node's role, frequency and first_seen, so an
+        # existing key gains the new role instead.
+        if text in self.graph:
+            node = self.graph.nodes[text]
+            node["type"] = add_role(node.get("type"), node_type)
+            node["frequency"] += 1
+            node["last_seen"] = now
+            if self.metrics is not None:
+                self.metrics.record_node_merged()
+            logger.debug(
+                "Added role %s to existing node=%r roles=%s frequency=%d",
+                node_type,
+                text,
+                node["type"],
+                node["frequency"],
+            )
+            return text
 
         self.graph.add_node(
             text,
-            type=node_type,
-            embedding=embedding,
+            type=(node_type,),
+            embedding=self.merge_engine.embed(text),
             frequency=1,
             first_seen=now,
             last_seen=now,
