@@ -12,6 +12,7 @@ import pytest
 
 from driftguard.graph.graph_store import GraphStore
 from driftguard.graph.merge_engine import MergeEngine, literal_tokens
+from driftguard.utils.node_roles import has_role
 from driftguard.graph.prune_engine import PruneEngine
 from driftguard.models.event import Event
 
@@ -80,7 +81,7 @@ def test_events_differing_only_by_identifier_stay_separate(graph_store):
     actions = [
         node
         for node, data in graph_store.graph.nodes(data=True)
-        if data["type"] == "action"
+        if has_role(data["type"], "action")
     ]
     assert sorted(actions) == ["delete user 1", "delete user 2", "delete user 3"]
     assert graph_store.graph.nodes["delete user 1"]["frequency"] == 1
@@ -101,7 +102,7 @@ def test_identifier_presence_blocks_merge(graph_store):
     actions = {
         node
         for node, data in graph_store.graph.nodes(data=True)
-        if data["type"] == "action"
+        if has_role(data["type"], "action")
     }
     assert actions == {"delete user 1", "delete all users"}
 
@@ -117,7 +118,7 @@ def test_paraphrases_without_identifiers_still_merge(graph_store):
     actions = [
         node
         for node, data in graph_store.graph.nodes(data=True)
-        if data["type"] == "action"
+        if has_role(data["type"], "action")
     ]
     assert actions == ["increase salt"]
     assert graph_store.graph.nodes["increase salt"]["frequency"] == 2
