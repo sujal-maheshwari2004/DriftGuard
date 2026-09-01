@@ -10,6 +10,24 @@ from driftguard.utils.similarity import cosine_similarity
 logger = get_logger(__name__)
 
 
+def literal_tokens(text: str) -> frozenset[str]:
+    """
+    Return the tokens that carry an identity rather than a meaning.
+
+    Embeddings score "delete user 1" and "delete user 2" at ~0.93 because the
+    two differ only in a digit, which the encoder barely notices. Merging them
+    silently destroys one of the memories, so any token containing a digit
+    (ids, counts, versions, ports) is treated as a literal that must match
+    exactly before two nodes can be considered the same.
+    """
+
+    return frozenset(
+        token
+        for token in text.split()
+        if any(character.isdigit() for character in token)
+    )
+
+
 class MergeEngine:
     """
     Handles semantic node deduplication.
@@ -64,12 +82,18 @@ class MergeEngine:
         """
         Return the best matching node if similarity exceeds threshold.
         Returns None if graph is empty or no match found.
+
+        Candidates whose literal tokens differ from the query's are rejected
+        before scoring — see literal_tokens().
         """
+
+        query_literals = literal_tokens(text)
 
         candidates = [
             node
             for node in graph.nodes
             if graph.nodes[node]["type"] == node_type
+            and literal_tokens(node) == query_literals
         ]
 
         if not candidates:

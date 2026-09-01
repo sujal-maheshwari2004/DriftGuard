@@ -98,10 +98,11 @@ def create_mcp_server(
     @mcp.tool()
     def deep_prune():
         """
-        Run a full graph cleanup pass.
+        Run a full graph cleanup pass. This permanently deletes memories.
 
-        Removes weak edges, stale nodes, and isolated nodes.
-        Call occasionally to keep the memory graph healthy.
+        Removes links that were never reinforced, nodes that have not been
+        seen inside the stale window, and nodes left with no links. Anything
+        newer than the stale window is kept. Call occasionally, not routinely.
         """
 
         return runtime.deep_prune()
