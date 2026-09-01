@@ -7,6 +7,8 @@ from pathlib import Path
 from datetime import datetime
 
 from driftguard.logging_config import get_logger
+from driftguard.storage.file_lock import FileLock
+from driftguard.storage.graph_merge import merge_graphs
 
 
 logger = get_logger(__name__)
@@ -62,9 +64,20 @@ class Persistence:
     # SAVE
     # =====================================================
 
-    def save_graph(self, graph: nx.DiGraph):
+    def save_graph(self, graph: nx.DiGraph, *, merge: bool = True):
 
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        with FileLock(self.filepath):
+            self._write_locked(graph, merge=merge)
+
+    def _write_locked(self, graph: nx.DiGraph, *, merge: bool):
+
+        if merge:
+            stored = self.load_graph()
+
+            if stored is not None:
+                graph = merge_graphs(stored, graph)
 
         payload = {
             "format": PERSISTENCE_FORMAT_NAME,

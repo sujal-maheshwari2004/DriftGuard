@@ -29,14 +29,16 @@ class FakeGraphStore:
         self.traversal_max_paths = traversal_max_paths
         self.load_calls = 0
         self.save_calls = 0
+        self.merge_flags = []
         self.added_events = []
         self.graph = {"graph": "value"}
 
     def load(self):
         self.load_calls += 1
 
-    def save(self):
+    def save(self, *, merge: bool = True):
         self.save_calls += 1
+        self.merge_flags.append(merge)
 
     def add_event(self, event):
         self.added_events.append(event)

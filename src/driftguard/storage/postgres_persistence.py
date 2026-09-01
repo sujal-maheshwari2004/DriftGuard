@@ -9,6 +9,7 @@ import numpy as np
 
 from driftguard.errors import DriftGuardDependencyError
 from driftguard.logging_config import get_logger
+from driftguard.storage.graph_merge import merge_graphs
 from driftguard.utils.node_roles import parse_roles, serialize_roles
 
 
@@ -107,10 +108,14 @@ class PostgresPersistence:
             table_prefix,
         )
 
-    def save_graph(self, graph: nx.DiGraph) -> None:
+    def save_graph(self, graph: nx.DiGraph, *, merge: bool = True) -> None:
         sa = self._sa
         with self._engine.begin() as connection:
             self._ensure_schema(connection)
+
+            if merge:
+                graph = merge_graphs(self._read_graph(connection), graph)
+
             connection.execute(sa.delete(self._edges_table))
             connection.execute(sa.delete(self._nodes_table))
 
@@ -154,35 +159,45 @@ class PostgresPersistence:
             logger.info("Postgres persistence tables do not exist yet")
             return None
 
-        graph = nx.DiGraph()
-
         with self._engine.begin() as connection:
             self._ensure_schema(connection)
-
-            for row in connection.execute(sa.select(self._nodes_table)):
-                graph.add_node(
-                    row.text,
-                    type=parse_roles(row.type),
-                    embedding=self._deserialize_embedding(row.embedding),
-                    frequency=row.frequency,
-                    first_seen=self._deserialize_datetime(row.first_seen),
-                    last_seen=self._deserialize_datetime(row.last_seen),
-                )
-
-            for row in connection.execute(sa.select(self._edges_table)):
-                graph.add_edge(
-                    row.src,
-                    row.dst,
-                    frequency=row.frequency,
-                    weight=row.weight,
-                    created_at=self._deserialize_datetime(row.created_at),
-                )
+            graph = self._read_graph(connection)
 
         logger.info(
             "Loaded graph from Postgres nodes=%d edges=%d",
             graph.number_of_nodes(),
             graph.number_of_edges(),
         )
+        return graph
+
+    def _read_graph(self, connection) -> nx.DiGraph:
+        """
+        Build a graph from an open connection, so save_graph can read the
+        stored graph inside its own transaction.
+        """
+
+        sa = self._sa
+        graph = nx.DiGraph()
+
+        for row in connection.execute(sa.select(self._nodes_table)):
+            graph.add_node(
+                row.text,
+                type=parse_roles(row.type),
+                embedding=self._deserialize_embedding(row.embedding),
+                frequency=row.frequency,
+                first_seen=self._deserialize_datetime(row.first_seen),
+                last_seen=self._deserialize_datetime(row.last_seen),
+            )
+
+        for row in connection.execute(sa.select(self._edges_table)):
+            graph.add_edge(
+                row.src,
+                row.dst,
+                frequency=row.frequency,
+                weight=row.weight,
+                created_at=self._deserialize_datetime(row.created_at),
+            )
+
         return graph
 
     def _ensure_schema(self, connection) -> None:
