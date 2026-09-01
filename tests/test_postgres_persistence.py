@@ -68,27 +68,56 @@ def test_postgres_persistence_round_trips_graph(persistence):
     assert loaded["increase salt"]["too salty"]["frequency"] == 3
 
 
-def test_postgres_persistence_overwrites_previous_graph(persistence):
-    """Saving a new graph should replace the previously persisted contents."""
-
-    persistence.save_graph(_build_graph())
-
-    smaller_graph = nx.DiGraph()
-    smaller_graph.add_node(
-        "lower heat",
+def _single_node_graph(text: str = "lower heat") -> nx.DiGraph:
+    graph = nx.DiGraph()
+    graph.add_node(
+        text,
         type="action",
         embedding=np.array([0.1, 0.2], dtype=np.float32),
         frequency=1,
         first_seen=datetime.now(UTC),
         last_seen=datetime.now(UTC),
     )
-    persistence.save_graph(smaller_graph)
+    return graph
+
+
+def test_postgres_persistence_merges_into_the_stored_graph(persistence):
+    """A second writer's nodes should not erase the first writer's."""
+
+    persistence.save_graph(_build_graph())
+    persistence.save_graph(_single_node_graph())
+
+    loaded = persistence.load_graph()
+
+    assert loaded.number_of_nodes() == 3
+    assert loaded.number_of_edges() == 1
+    assert "lower heat" in loaded.nodes
+    assert "increase salt" in loaded.nodes
+
+
+def test_postgres_persistence_replaces_when_merge_is_false(persistence):
+    """merge=False replaces the stored graph, which is what deep_prune needs."""
+
+    persistence.save_graph(_build_graph())
+    persistence.save_graph(_single_node_graph(), merge=False)
 
     loaded = persistence.load_graph()
 
     assert loaded.number_of_nodes() == 1
     assert loaded.number_of_edges() == 0
     assert "lower heat" in loaded.nodes
+
+
+def test_postgres_persistence_round_trips_multiple_roles(persistence):
+    """The role tuple must survive the single type column."""
+
+    graph = _single_node_graph("restart the server")
+    graph.nodes["restart the server"]["type"] = ("action", "outcome")
+    persistence.save_graph(graph, merge=False)
+
+    loaded = persistence.load_graph()
+
+    assert loaded.nodes["restart the server"]["type"] == ("action", "outcome")
 
 
 def test_postgres_persistence_handles_null_embeddings(persistence):

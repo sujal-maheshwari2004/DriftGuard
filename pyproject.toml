@@ -60,7 +60,11 @@ dependencies = [
 [project.optional-dependencies]
 
 test = [
-  "pytest>=7.0"
+  "pytest>=7.0",
+  # The Postgres backend's tests run against SQLAlchemy over in-memory SQLite,
+  # so they need no database. Without this they silently skip, and the backend
+  # goes untested in CI.
+  "SQLAlchemy>=2.0"
 ]
 
 demo = [
