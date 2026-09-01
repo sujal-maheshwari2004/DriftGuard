@@ -116,6 +116,16 @@ def benchmark_normalize_text(text: str) -> str:
 
 
 class BenchmarkEmbeddingEngine:
+    """
+    A deterministic bag-of-words stand-in, not the shipped encoder.
+
+    Twelve hand-picked features plus four hash buckets. It makes the suite
+    reproducible and offline, and it exercises the merge, traversal and
+    retrieval plumbing — but it says nothing about how sentence-transformers
+    and spaCy behave, and the numbers must not be read as a quality
+    measurement of the real pipeline.
+    """
+
     def __init__(self):
         self._feature_index = {
             feature: index for index, feature in enumerate(BENCHMARK_FEATURES)
@@ -187,18 +197,22 @@ def builtin_benchmark_suite() -> BenchmarkSuite:
             outcome="guest noticed the meat was dry",
         ),
     )
+    # Expected anchors are derived from the seeded text rather than written
+    # out by hand. They were hardcoded, the alias table below changed under
+    # them, and the shipped benchmark reported merge f1=0.50 on a clean
+    # install for cases that were only ever wrong in the expectation.
     merge_cases = (
         MergeBenchmarkCase(
             name="seasoning paraphrase",
             query="add more salt",
             node_type="action",
-            expected_anchor="increase salt",
+            expected_anchor=benchmark_normalize_text("increase salt"),
         ),
         MergeBenchmarkCase(
             name="heat paraphrase",
             query="cook on higher heat",
             node_type="action",
-            expected_anchor="raise heat heat",
+            expected_anchor=benchmark_normalize_text("raise pan heat"),
         ),
         MergeBenchmarkCase(
             name="unrelated action",
@@ -211,17 +225,19 @@ def builtin_benchmark_suite() -> BenchmarkSuite:
         RetrievalBenchmarkCase(
             name="seasoning warning",
             query="season more aggressively",
-            expected_risks=("salt",),
+            expected_risks=(benchmark_normalize_text("too salty"),),
         ),
         RetrievalBenchmarkCase(
             name="heat warning",
             query="finish on maximum heat",
-            expected_risks=("outside burn center heat",),
+            expected_risks=(
+                benchmark_normalize_text("outside burned before center cooked"),
+            ),
         ),
         RetrievalBenchmarkCase(
             name="resting warning",
             query="serve without letting it rest",
-            expected_risks=("meat dried out quickly",),
+            expected_risks=(benchmark_normalize_text("meat dried out quickly"),),
         ),
         RetrievalBenchmarkCase(
             name="unrelated no-warning",
@@ -285,6 +301,12 @@ def format_benchmark_report(report: BenchmarkSuiteReport) -> str:
     lines = [
         "DriftGuard Benchmark Report",
         "",
+        "Regression harness for the graph plumbing. Runs against a "
+        "deterministic stub",
+        "embedder, not sentence-transformers or spaCy, so these scores do not "
+        "describe",
+        "retrieval quality on real text.",
+        "",
         (
             "Merge: "
             f"precision={report.merge_metrics.precision:.2f} "
@@ -323,7 +345,12 @@ def format_benchmark_report(report: BenchmarkSuiteReport) -> str:
 
 def parse_args(argv: list[str] | None = None) -> Namespace:
     parser = ArgumentParser(
-        description="Run the built-in DriftGuard quality benchmark suite."
+        description=(
+            "Run the built-in DriftGuard regression suite. Uses a deterministic "
+            "stub embedder rather than the shipped sentence-transformers and "
+            "spaCy pipeline, so the scores measure the graph plumbing, not "
+            "retrieval quality on real text."
+        )
     )
     parser.add_argument(
         "--format",

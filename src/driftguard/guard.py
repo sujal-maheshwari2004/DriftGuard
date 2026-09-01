@@ -177,10 +177,15 @@ class DriftGuard:
         policy: GuardPolicy | None,
         raise_on_match: bool,
     ) -> GuardPolicy:
-        if raise_on_match and policy in (None, "warn"):
+        resolved = policy or self.settings.guard_policy
+
+        # raise_on_match is a shorthand for "block", not an override. A
+        # configured record_only means the caller asked to skip review
+        # entirely, so it wins.
+        if raise_on_match and resolved == "warn":
             return "block"
 
-        return policy or self.settings.guard_policy
+        return resolved
 
     def _resolve_min_confidence(self, min_confidence: float | None) -> float:
         if min_confidence is None:

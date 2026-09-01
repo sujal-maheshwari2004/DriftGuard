@@ -6,6 +6,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+from driftguard.errors import PersistenceError
+from driftguard.storage.embedding_codec import decode as decode_embedding
+from driftguard.storage.embedding_codec import encode as encode_embedding
 from driftguard.logging_config import get_logger
 from driftguard.storage.file_lock import FileLock
 from driftguard.storage.graph_merge import merge_graphs
@@ -13,7 +16,11 @@ from driftguard.storage.graph_merge import merge_graphs
 
 logger = get_logger(__name__)
 PERSISTENCE_FORMAT_NAME = "driftguard_graph"
-PERSISTENCE_FORMAT_VERSION = 1
+PERSISTENCE_FORMAT_VERSION = 2
+# Version 1 wrote embeddings as JSON lists of floats; version 2 packs them as
+# base64 float32. Both are readable.
+SUPPORTED_FORMAT_VERSIONS = (1, 2)
+NODE_LINK_EDGES_KEY = "edges"
 
 
 # =====================================================
@@ -30,7 +37,7 @@ class _GraphEncoder(json.JSONEncoder):
     def default(self, obj):
 
         if isinstance(obj, np.ndarray):
-            return obj.tolist()
+            return encode_embedding(obj)
 
         if isinstance(obj, datetime):
             return obj.isoformat()
@@ -82,7 +89,9 @@ class Persistence:
         payload = {
             "format": PERSISTENCE_FORMAT_NAME,
             "format_version": PERSISTENCE_FORMAT_VERSION,
-            "graph": nx.node_link_data(graph),
+            # networkx renamed this key from "links" to "edges" in 3.6. Pin it
+            # so a file written by one version is readable by the other.
+            "graph": nx.node_link_data(graph, edges=NODE_LINK_EDGES_KEY),
         }
         temp_path = self.filepath.with_suffix(f"{self.filepath.suffix}.tmp")
 
@@ -111,22 +120,26 @@ class Persistence:
             logger.info("Persistence file does not exist at %s", self.filepath)
             return None
 
-        with open(self.filepath, "r", encoding="utf-8") as f:
-            raw_payload = json.load(f)
+        try:
+            with open(self.filepath, "r", encoding="utf-8") as f:
+                raw_payload = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise PersistenceError(
+                f"DriftGuard could not read the graph at {self.filepath}: {exc}. "
+                f"Move or delete the file to start from an empty graph."
+            ) from exc
 
         graph_data = self._extract_graph_data(raw_payload)
-        graph = nx.node_link_graph(graph_data, directed=True)
+        # Files written before the key was pinned may use either name.
+        edges_key = NODE_LINK_EDGES_KEY if "edges" in graph_data else "links"
+        graph = nx.node_link_graph(graph_data, directed=True, edges=edges_key)
 
         # Restore numpy arrays and datetime objects
         for node in graph.nodes:
             node_data = graph.nodes[node]
 
-            if "embedding" in node_data and isinstance(
-                node_data["embedding"], list
-            ):
-                node_data["embedding"] = np.array(
-                    node_data["embedding"], dtype=np.float32
-                )
+            if node_data.get("embedding") is not None:
+                node_data["embedding"] = decode_embedding(node_data["embedding"])
 
             for key in ("first_seen", "last_seen"):
                 if key in node_data and isinstance(node_data[key], str):
@@ -152,7 +165,7 @@ class Persistence:
 
     def _extract_graph_data(self, raw_payload: dict) -> dict:
         if not isinstance(raw_payload, dict):
-            raise ValueError("Persistence payload must be a JSON object")
+            raise self._unreadable("payload is not a JSON object")
 
         # Backward compatibility for the original node-link JSON format.
         if (
@@ -171,19 +184,29 @@ class Persistence:
         graph_data = raw_payload.get("graph")
 
         if payload_format != PERSISTENCE_FORMAT_NAME:
-            raise ValueError(
-                f"Unsupported persistence format: {payload_format!r}"
-            )
+            raise self._unreadable(f"unsupported format {payload_format!r}")
 
-        if version != PERSISTENCE_FORMAT_VERSION:
-            raise ValueError(
-                f"Unsupported persistence format version: {version!r}"
-            )
+        if version not in SUPPORTED_FORMAT_VERSIONS:
+            raise self._unreadable(f"unsupported format version {version!r}")
 
         if not self._looks_like_node_link_graph(graph_data):
-            raise ValueError("Persistence graph payload is invalid or incomplete")
+            raise self._unreadable("graph payload is invalid or incomplete")
 
         return graph_data
+
+    def _unreadable(self, reason: str) -> PersistenceError:
+        """
+        Every load failure names the file and how to recover from it.
+
+        The graph is loaded during construction, so an unreadable file used to
+        abort startup with a bare ValueError or JSONDecodeError that callers
+        could not tell apart from any other bad value.
+        """
+
+        return PersistenceError(
+            f"DriftGuard could not read the graph at {self.filepath}: {reason}. "
+            f"Move or delete the file to start from an empty graph."
+        )
 
     def _looks_like_node_link_graph(self, payload: dict | None) -> bool:
         return (

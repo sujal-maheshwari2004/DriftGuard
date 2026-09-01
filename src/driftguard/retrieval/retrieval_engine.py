@@ -156,6 +156,7 @@ class RetrievalEngine:
                     **{second_field_name: second},
                     frequency=node_freq,
                     confidence=confidence,
+                    outcome=chain[-1] if len(chain) > 2 else None,
                 )
 
         return sorted(

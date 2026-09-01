@@ -9,6 +9,8 @@ import networkx as nx
 import numpy as np
 
 from driftguard.logging_config import get_logger
+from driftguard.storage.embedding_codec import decode as decode_embedding
+from driftguard.storage.embedding_codec import encode as encode_embedding
 from driftguard.storage.graph_merge import merge_graphs
 from driftguard.utils.node_roles import parse_roles, serialize_roles
 
@@ -229,19 +231,17 @@ class SQLitePersistence:
         return None if row is None else str(row[0])
 
     def _serialize_embedding(self, embedding) -> str | None:
-        if embedding is None:
-            return None
-
-        if isinstance(embedding, np.ndarray):
-            return json.dumps(embedding.tolist())
-
-        return json.dumps(list(embedding))
+        return encode_embedding(embedding)
 
     def _deserialize_embedding(self, embedding: str | None):
         if embedding is None:
             return None
 
-        return np.array(json.loads(embedding), dtype=np.float32)
+        # Rows written before the packed form hold a JSON list of floats.
+        if not embedding.startswith("f32:"):
+            return np.array(json.loads(embedding), dtype=np.float32)
+
+        return decode_embedding(embedding)
 
     def _serialize_datetime(self, value: datetime | None) -> str | None:
         return None if value is None else value.isoformat()

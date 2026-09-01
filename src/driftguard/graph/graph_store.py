@@ -81,7 +81,7 @@ class GraphStore:
         # successful write persisted it. Everything after this point is pure
         # graph mutation, which cannot raise.
         prepared = [
-            (self.merge_engine.normalize(text), role)
+            (self._normalize_field(text, role), role)
             for text, role in (
                 (event.action, "action"),
                 (event.feedback, "feedback"),
@@ -218,6 +218,39 @@ class GraphStore:
             "nodes": self.graph.number_of_nodes(),
             "edges": self.graph.number_of_edges(),
         }
+
+    # =====================================================
+    # INTERNAL: NORMALIZE ONE FIELD
+    # =====================================================
+
+    def _normalize_field(self, text: str, role: str) -> str:
+        """
+        Normalize one field, falling back to the raw text when it empties.
+
+        Lemmatizing and dropping stopwords reduces "!!!", "the a of" and
+        "still here" to the empty string. Those were all stored as a single
+        node keyed "" with a self-loop, so every later degenerate event merged
+        into the same meaningless node.
+
+        Dropping the event instead would be worse — a memory the caller asked
+        to keep would be lost because of how it happened to be worded — so the
+        raw text is used. Event validation has already rejected a blank field,
+        so the fallback is never empty and the "" node cannot be created.
+        """
+
+        normalized = self.merge_engine.normalize(text)
+
+        if normalized:
+            return normalized
+
+        fallback = text.strip().lower()
+        logger.info(
+            "Normalization emptied %s=%r; keeping the raw text %r",
+            role,
+            text,
+            fallback,
+        )
+        return fallback
 
     # =====================================================
     # INTERNAL: RESOLVE NODE

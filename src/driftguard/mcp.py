@@ -77,6 +77,7 @@ def create_mcp_server(
                 {
                     "trigger": warning.trigger,
                     "risk": warning.risk,
+                    "outcome": warning.outcome,
                     "frequency": warning.frequency,
                     "confidence": warning.confidence,
                 }
@@ -86,6 +87,7 @@ def create_mcp_server(
                 {
                     "trigger": reinforcement.trigger,
                     "recommendation": reinforcement.recommendation,
+                    "outcome": reinforcement.outcome,
                     "frequency": reinforcement.frequency,
                     "confidence": reinforcement.confidence,
                 }

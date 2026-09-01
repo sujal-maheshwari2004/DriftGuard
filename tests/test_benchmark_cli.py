@@ -25,10 +25,12 @@ def test_run_builtin_benchmark_produces_nontrivial_scores():
 
     report = run_builtin_benchmark()
 
-    assert report.merge_metrics.precision >= 0.5
-    assert report.retrieval_metrics.recall >= 0.5
-    assert any(result.passed for result in report.merge_results)
-    assert any(result.passed for result in report.retrieval_results)
+    assert report.merge_metrics.precision == 1.0
+    assert report.merge_metrics.recall == 1.0
+    assert report.retrieval_metrics.precision == 1.0
+    assert report.retrieval_metrics.recall == 1.0
+    assert all(result.passed for result in report.merge_results)
+    assert all(result.passed for result in report.retrieval_results)
 
 
 def test_format_benchmark_report_contains_summary_sections():

@@ -7,6 +7,7 @@ import networkx as nx
 import numpy as np
 import pytest
 
+from driftguard.errors import PersistenceError
 from driftguard.storage.persistence import (
     PERSISTENCE_FORMAT_NAME,
     PERSISTENCE_FORMAT_VERSION,
@@ -97,7 +98,7 @@ def test_persistence_rejects_unknown_format_version(writable_filepath):
 
     persistence = Persistence(filepath=str(filepath))
 
-    with pytest.raises(ValueError, match="Unsupported persistence format version"):
+    with pytest.raises(PersistenceError, match="unsupported format version"):
         persistence.load_graph()
 
 
@@ -116,5 +117,5 @@ def test_persistence_rejects_invalid_graph_payload(writable_filepath):
 
     persistence = Persistence(filepath=str(filepath))
 
-    with pytest.raises(ValueError, match="invalid or incomplete"):
+    with pytest.raises(PersistenceError, match="invalid or incomplete"):
         persistence.load_graph()
