@@ -45,11 +45,17 @@ class GraphStore:
     # PERSISTENCE
     # =====================================================
 
-    def save(self):
-        """Persist current graph to disk."""
+    def save(self, *, merge: bool = True):
+        """
+        Persist current graph to disk.
 
-        logger.debug("Saving graph with stats=%s", self.stats())
-        self.persistence_engine.save_graph(self.graph)
+        merge=False replaces what is stored instead of folding into it, which
+        is what deep_prune needs: a merging save would read the pruned nodes
+        straight back out of the store.
+        """
+
+        logger.debug("Saving graph with stats=%s merge=%s", self.stats(), merge)
+        self.persistence_engine.save_graph(self.graph, merge=merge)
 
     def load(self):
         """Load graph from disk. No-op if no file exists."""
