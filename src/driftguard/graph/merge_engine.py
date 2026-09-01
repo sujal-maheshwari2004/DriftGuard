@@ -4,28 +4,34 @@ from driftguard.config import DEFAULT_SETTINGS, DriftGuardSettings
 from driftguard.embedding.embedding_engine import EmbeddingEngine
 from driftguard.logging_config import get_logger
 from driftguard.utils.node_roles import has_role
-from driftguard.utils.normalization import normalize_text
+from driftguard.utils.normalization import POLARITY_WORDS, normalize_text
 from driftguard.utils.similarity import cosine_similarity
 
 
 logger = get_logger(__name__)
 
 
-def literal_tokens(text: str) -> frozenset[str]:
+def discriminative_tokens(text: str) -> frozenset[str]:
     """
-    Return the tokens that carry an identity rather than a meaning.
+    Return the tokens that must match exactly before two nodes can be merged.
 
-    Embeddings score "delete user 1" and "delete user 2" at ~0.93 because the
-    two differ only in a digit, which the encoder barely notices. Merging them
-    silently destroys one of the memories, so any token containing a digit
-    (ids, counts, versions, ports) is treated as a literal that must match
-    exactly before two nodes can be considered the same.
+    Embeddings barely register the difference between "delete user 1" and
+    "delete user 2" (~0.93) or between "not deploy friday" and "deploy friday"
+    (~0.93), so similarity alone merges them and destroys one of the memories.
+    Two kinds of token are therefore compared literally:
+
+    - identity: anything containing a digit — ids, counts, versions, ports
+    - polarity: negations and their opposites, which invert the meaning of
+      everything around them
+
+    Paraphrases are unaffected, since they rarely differ in either.
     """
 
     return frozenset(
         token
         for token in text.split()
         if any(character.isdigit() for character in token)
+        or token in POLARITY_WORDS
     )
 
 
@@ -85,16 +91,16 @@ class MergeEngine:
         Returns None if graph is empty or no match found.
 
         Candidates whose literal tokens differ from the query's are rejected
-        before scoring — see literal_tokens().
+        before scoring — see discriminative_tokens().
         """
 
-        query_literals = literal_tokens(text)
+        query_tokens = discriminative_tokens(text)
 
         candidates = [
             node
             for node in graph.nodes
             if has_role(graph.nodes[node].get("type"), node_type)
-            and literal_tokens(node) == query_literals
+            and discriminative_tokens(node) == query_tokens
         ]
 
         if not candidates:
