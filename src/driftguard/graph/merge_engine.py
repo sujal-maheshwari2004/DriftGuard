@@ -85,6 +85,7 @@ class MergeEngine:
         text: str,
         node_type: str,
         graph,
+        embedding=None,
     ) -> str | None:
         """
         Return the best matching node if similarity exceeds threshold.
@@ -92,6 +93,8 @@ class MergeEngine:
 
         Candidates whose literal tokens differ from the query's are rejected
         before scoring — see discriminative_tokens().
+
+        Pass `embedding` to reuse a vector the caller already computed.
         """
 
         query_tokens = discriminative_tokens(text)
@@ -107,7 +110,7 @@ class MergeEngine:
             logger.debug("No candidates available for node_type=%r", node_type)
             return None
 
-        query_emb = self.embed(text)
+        query_emb = self.embed(text) if embedding is None else embedding
         threshold = self._get_threshold(node_type)
 
         best_node = None

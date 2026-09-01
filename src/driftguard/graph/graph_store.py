@@ -69,9 +69,27 @@ class GraphStore:
     def add_event(self, event):
         before = self.stats()
 
-        action = self._get_or_create_node(event.action, "action")
-        feedback = self._get_or_create_node(event.feedback, "feedback")
-        outcome = self._get_or_create_node(event.outcome, "outcome")
+        # Normalize and embed all three fields before touching the graph.
+        # Those are the only steps that can fail, and a half-written event
+        # used to leave an orphan node behind — invisible until the next
+        # successful write persisted it. Everything after this point is pure
+        # graph mutation, which cannot raise.
+        prepared = [
+            (self.merge_engine.normalize(text), role)
+            for text, role in (
+                (event.action, "action"),
+                (event.feedback, "feedback"),
+                (event.outcome, "outcome"),
+            )
+        ]
+        prepared = [
+            (text, role, self.merge_engine.embed(text)) for text, role in prepared
+        ]
+
+        action, feedback, outcome = [
+            self._resolve_node(text, role, embedding)
+            for text, role, embedding in prepared
+        ]
 
         self._add_edge(action, feedback)
         self._add_edge(feedback, outcome)
@@ -196,17 +214,22 @@ class GraphStore:
         }
 
     # =====================================================
-    # INTERNAL: GET OR CREATE NODE
+    # INTERNAL: RESOLVE NODE
     # =====================================================
 
-    def _get_or_create_node(self, text: str, node_type: str) -> str:
+    def _resolve_node(self, text: str, node_type: str, embedding) -> str:
+        """
+        Return the node for already-normalized `text`, creating it if needed.
 
-        normalized = self.merge_engine.normalize(text)
+        `embedding` is computed by the caller so that nothing inside this
+        method can fail partway through an event.
+        """
 
         existing = self.merge_engine.find_similar_node(
-            normalized,
+            text,
             node_type,
             self.graph,
+            embedding,
         )
 
         if existing:
@@ -224,13 +247,13 @@ class GraphStore:
             )
             return existing
 
-        return self._create_node(normalized, node_type)
+        return self._create_node(text, node_type, embedding)
 
     # =====================================================
     # INTERNAL: CREATE NODE
     # =====================================================
 
-    def _create_node(self, text: str, node_type: str) -> str:
+    def _create_node(self, text: str, node_type: str, embedding) -> str:
 
         now = datetime.now(UTC)
 
@@ -257,7 +280,7 @@ class GraphStore:
         self.graph.add_node(
             text,
             type=(node_type,),
-            embedding=self.merge_engine.embed(text),
+            embedding=embedding,
             frequency=1,
             first_seen=now,
             last_seen=now,
