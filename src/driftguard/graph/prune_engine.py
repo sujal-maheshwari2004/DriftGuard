@@ -31,10 +31,12 @@ class PruneEngine:
         Parameters
         ----------
         node_stale_days:
-            Nodes not updated within this window become eligible for removal.
+            Nodes and edges not updated within this window become eligible
+            for removal. Nothing newer than this window is ever deleted.
 
         edge_min_frequency:
-            Edges seen fewer times than this during deep_prune are removed.
+            Edges seen fewer times than this are removed by deep_prune, but
+            only once they are also older than node_stale_days.
         """
 
         self.node_stale_days = node_stale_days
@@ -96,13 +98,20 @@ class PruneEngine:
 
     def _remove_weak_edges(self, graph):
         """
-        Remove causal links that were never reinforced.
+        Remove causal links that were never reinforced *and* have gone stale.
+
+        Frequency alone is not enough: with the default edge_min_frequency of
+        2, every memory recorded exactly once is "weak" the moment it is
+        written, so an unguarded pass deletes the whole graph. An edge only
+        becomes eligible once it has also survived the stale window without
+        being reinforced. Edges with no created_at (legacy files) are kept.
         """
 
         weak = [
             (src, dst)
             for src, dst, data in graph.edges(data=True)
             if data.get("frequency", 1) < self.edge_min_frequency
+            and self._is_stale(data.get("created_at"))
         ]
 
         for edge in weak:
@@ -119,14 +128,10 @@ class PruneEngine:
         Remove nodes not seen within the stale window.
         """
 
-        now = datetime.now(UTC)
-        cutoff = timedelta(days=self.node_stale_days)
-
         stale = [
             node
             for node in graph.nodes
-            if (last := graph.nodes[node].get("last_seen"))
-            and (now - last) > cutoff
+            if self._is_stale(graph.nodes[node].get("last_seen"))
         ]
 
         for node in stale:
@@ -140,16 +145,38 @@ class PruneEngine:
 
     def _remove_isolated_nodes(self, graph):
         """
-        Remove nodes with no incoming or outgoing edges.
+        Remove stale nodes left with no incoming or outgoing edges.
+
+        Freshness wins over tidiness: a node that lost its edges but was seen
+        recently is still live knowledge, so it stays until it ages out.
         """
 
         isolated = [
             node
             for node in graph.nodes
-            if graph.in_degree(node) == 0 and graph.out_degree(node) == 0
+            if graph.in_degree(node) == 0
+            and graph.out_degree(node) == 0
+            and self._is_stale(graph.nodes[node].get("last_seen"))
         ]
 
         for node in isolated:
             graph.remove_node(node)
 
         return len(isolated)
+
+    # =====================================================
+    # STALENESS
+    # =====================================================
+
+    def _is_stale(self, timestamp) -> bool:
+        """
+        True when timestamp is older than the stale window.
+
+        A missing or malformed timestamp is treated as not stale, so a graph
+        written by an older version is never deleted on a guess.
+        """
+
+        if not isinstance(timestamp, datetime):
+            return False
+
+        return (datetime.now(UTC) - timestamp) > timedelta(days=self.node_stale_days)
