@@ -4,6 +4,18 @@ class DriftGuardError(RuntimeError):
     """
 
 
+class PersistenceError(DriftGuardError):
+    """
+    Raised when a stored graph cannot be read back.
+    """
+
+
+class EventValidationError(DriftGuardError):
+    """
+    Raised when an event is rejected before it reaches the graph.
+    """
+
+
 class DriftGuardDependencyError(DriftGuardError):
     """
     Raised when an optional runtime dependency is unavailable or misconfigured.

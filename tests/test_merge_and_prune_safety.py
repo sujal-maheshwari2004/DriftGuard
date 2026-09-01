@@ -11,7 +11,7 @@ import networkx as nx
 import pytest
 
 from driftguard.graph.graph_store import GraphStore
-from driftguard.graph.merge_engine import MergeEngine, literal_tokens
+from driftguard.graph.merge_engine import MergeEngine, discriminative_tokens
 from driftguard.utils.node_roles import has_role
 from driftguard.graph.prune_engine import PruneEngine
 from driftguard.models.event import Event
@@ -59,13 +59,13 @@ def graph_store(monkeypatch):
 # MERGE: identifiers must not collapse
 # =====================================================
 
-def test_literal_tokens_picks_up_identifiers():
-    assert literal_tokens("delete user 1") == frozenset({"1"})
-    assert literal_tokens("run migration 23") == frozenset({"23"})
-    assert literal_tokens("restart worker-7 on port 8080") == frozenset(
+def test_discriminative_tokens_picks_up_identifiers():
+    assert discriminative_tokens("delete user 1") == frozenset({"1"})
+    assert discriminative_tokens("run migration 23") == frozenset({"23"})
+    assert discriminative_tokens("restart worker-7 on port 8080") == frozenset(
         {"worker-7", "8080"}
     )
-    assert literal_tokens("increase salt") == frozenset()
+    assert discriminative_tokens("increase salt") == frozenset()
 
 
 def test_events_differing_only_by_identifier_stay_separate(graph_store):

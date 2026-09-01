@@ -1,4 +1,25 @@
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version as _installed_version
+
+
+def _resolve_version() -> str:
+    """
+    Read the version from installed metadata rather than repeating it here.
+
+    The distribution is published as driftguard-ai; an editable install from
+    the repository registers as driftguard. Both are tried before giving up,
+    so __version__ can never drift from what pip reports.
+    """
+
+    for distribution in ("driftguard-ai", "driftguard"):
+        try:
+            return _installed_version(distribution)
+        except PackageNotFoundError:
+            continue
+
+    return "0.0.0+unknown"
+
+
+__version__ = _resolve_version()
 
 from driftguard.config import DEFAULT_SETTINGS, DriftGuardSettings
 from driftguard.benchmark import (

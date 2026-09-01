@@ -9,6 +9,9 @@ import networkx as nx
 import numpy as np
 
 from driftguard.logging_config import get_logger
+from driftguard.storage.embedding_codec import decode as decode_embedding
+from driftguard.storage.embedding_codec import encode as encode_embedding
+from driftguard.storage.graph_merge import merge_graphs
 from driftguard.utils.node_roles import parse_roles, serialize_roles
 
 
@@ -29,13 +32,19 @@ class SQLitePersistence:
         self.filepath = Path(filepath)
         logger.info("SQLite persistence configured with filepath=%s", self.filepath)
 
-    def save_graph(self, graph: nx.DiGraph) -> None:
+    def save_graph(self, graph: nx.DiGraph, *, merge: bool = True) -> None:
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
 
         connection = sqlite3.connect(self.filepath)
         try:
             self._ensure_schema(connection)
-            connection.execute("BEGIN")
+            # IMMEDIATE takes the write lock now rather than on first write,
+            # so the read below cannot be overtaken by another writer.
+            connection.execute("BEGIN IMMEDIATE")
+
+            if merge:
+                graph = merge_graphs(self._read_graph(connection), graph)
+
             connection.execute("DELETE FROM edges")
             connection.execute("DELETE FROM nodes")
 
@@ -100,48 +109,7 @@ class SQLitePersistence:
         connection = sqlite3.connect(self.filepath)
         try:
             self._ensure_schema(connection)
-
-            graph = nx.DiGraph()
-
-            for row in connection.execute(
-                """
-                SELECT
-                    text,
-                    type,
-                    embedding,
-                    frequency,
-                    first_seen,
-                    last_seen
-                FROM nodes
-                """
-            ):
-                graph.add_node(
-                    row[0],
-                    type=parse_roles(row[1]),
-                    embedding=self._deserialize_embedding(row[2]),
-                    frequency=row[3],
-                    first_seen=self._deserialize_datetime(row[4]),
-                    last_seen=self._deserialize_datetime(row[5]),
-                )
-
-            for row in connection.execute(
-                """
-                SELECT
-                    src,
-                    dst,
-                    frequency,
-                    weight,
-                    created_at
-                FROM edges
-                """
-            ):
-                graph.add_edge(
-                    row[0],
-                    row[1],
-                    frequency=row[2],
-                    weight=row[3],
-                    created_at=self._deserialize_datetime(row[4]),
-                )
+            graph = self._read_graph(connection)
 
             logger.info(
                 "Loaded graph from SQLite %s nodes=%d edges=%d",
@@ -152,6 +120,45 @@ class SQLitePersistence:
             return graph
         finally:
             connection.close()
+
+    def _read_graph(self, connection: sqlite3.Connection) -> nx.DiGraph:
+        """
+        Build a graph from an open connection, so save_graph can read the
+        stored graph inside its own transaction.
+        """
+
+        graph = nx.DiGraph()
+
+        for row in connection.execute(
+            """
+            SELECT text, type, embedding, frequency, first_seen, last_seen
+            FROM nodes
+            """
+        ):
+            graph.add_node(
+                row[0],
+                type=parse_roles(row[1]),
+                embedding=self._deserialize_embedding(row[2]),
+                frequency=row[3],
+                first_seen=self._deserialize_datetime(row[4]),
+                last_seen=self._deserialize_datetime(row[5]),
+            )
+
+        for row in connection.execute(
+            """
+            SELECT src, dst, frequency, weight, created_at
+            FROM edges
+            """
+        ):
+            graph.add_edge(
+                row[0],
+                row[1],
+                frequency=row[2],
+                weight=row[3],
+                created_at=self._deserialize_datetime(row[4]),
+            )
+
+        return graph
 
     def _ensure_schema(self, connection: sqlite3.Connection) -> None:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -224,19 +231,17 @@ class SQLitePersistence:
         return None if row is None else str(row[0])
 
     def _serialize_embedding(self, embedding) -> str | None:
-        if embedding is None:
-            return None
-
-        if isinstance(embedding, np.ndarray):
-            return json.dumps(embedding.tolist())
-
-        return json.dumps(list(embedding))
+        return encode_embedding(embedding)
 
     def _deserialize_embedding(self, embedding: str | None):
         if embedding is None:
             return None
 
-        return np.array(json.loads(embedding), dtype=np.float32)
+        # Rows written before the packed form hold a JSON list of floats.
+        if not embedding.startswith("f32:"):
+            return np.array(json.loads(embedding), dtype=np.float32)
+
+        return decode_embedding(embedding)
 
     def _serialize_datetime(self, value: datetime | None) -> str | None:
         return None if value is None else value.isoformat()

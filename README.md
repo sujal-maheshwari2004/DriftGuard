@@ -87,14 +87,21 @@ DriftGuard **does not replace your planner**. It is a read/write memory the plan
 
 ## Install
 
+**Both commands are required:**
+
 ```bash
 pip install driftguard-ai
+python -m spacy download en_core_web_sm
 ```
 
-DriftGuard needs a spaCy model for text normalization:
+The spaCy model cannot be declared as a dependency — PyPI rejects direct URL
+requirements and the model is not on the index — so `pip install` alone leaves
+DriftGuard unable to normalize text. `driftguard-mcp` checks for it at startup
+and fails with this message rather than waiting until the first write:
 
-```bash
-python -m spacy download en_core_web_sm
+```
+NormalizationDependencyError: DriftGuard could not load the spaCy model
+'en_core_web_sm'. Install it with: python -m spacy download en_core_web_sm
 ```
 
 Optional extras:
@@ -684,15 +691,33 @@ guard = DriftGuard(
 driftguard-mcp
 ```
 
+`driftguard-mcp` takes no arguments; it is configured entirely through the
+environment. Every field of `DriftGuardSettings` maps to `DRIFTGUARD_` plus the
+field name in upper case.
+
+**Pin the storage path.** Without one, the graph is written to
+`driftguard_graph.json` relative to whatever working directory your MCP client
+happens to launch the process in, so the memory moves when the client does.
+
 ```json
 {
   "mcpServers": {
     "driftguard": {
-      "command": "driftguard-mcp"
+      "command": "driftguard-mcp",
+      "env": {
+        "DRIFTGUARD_STORAGE_BACKEND": "sqlite",
+        "DRIFTGUARD_SQLITE_FILEPATH": "/absolute/path/driftguard.sqlite3",
+        "DRIFTGUARD_SUCCESS_SQLITE_FILEPATH": "/absolute/path/driftguard_success.sqlite3",
+        "DRIFTGUARD_GUARD_POLICY": "warn",
+        "DRIFTGUARD_LOG_LEVEL": "INFO"
+      }
     }
   }
 }
 ```
+
+The same variables work for any entry point via
+`DriftGuardSettings.from_env()`.
 
 | Tool | Purpose |
 | --- | --- |

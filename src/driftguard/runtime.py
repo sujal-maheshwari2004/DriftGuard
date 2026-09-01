@@ -124,8 +124,8 @@ class DriftGuardRuntime:
         mistakes_summary = self.prune_engine.deep_prune(self.graph_store.graph)
         successes_summary = self.prune_engine.deep_prune(self.success_graph_store.graph)
 
-        self.graph_store.save()
-        self.success_graph_store.save()
+        self.graph_store.save(merge=False)
+        self.success_graph_store.save(merge=False)
 
         mistakes_after = self.graph_store.stats()
         successes_after = self.success_graph_store.stats()

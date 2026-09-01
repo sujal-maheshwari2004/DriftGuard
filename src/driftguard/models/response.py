@@ -9,6 +9,9 @@ class Warning:
     risk: str
     frequency: int
     confidence: float
+    # The end of the chain. `risk` is the feedback that followed the trigger,
+    # which left the consequence an agent most needs out of the warning.
+    outcome: str | None = None
 
 
 @dataclass
@@ -17,6 +20,7 @@ class Reinforcement:
     recommendation: str
     frequency: int
     confidence: float
+    outcome: str | None = None
 
 
 @dataclass
